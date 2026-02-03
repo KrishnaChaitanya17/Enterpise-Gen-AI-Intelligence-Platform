@@ -1,0 +1,5 @@
+Service Outage Policy
+
+A service outage is an unplanned interruption to a production service.
+During an outage, the on-call engineer must respond within 15 minutes.
+Status updates must be shared every 30 minutes until resolution.

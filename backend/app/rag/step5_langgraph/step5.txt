@@ -1,0 +1,119 @@
+Step 5 — LangGraph Control Flow (COMPLETED)
+
+Goal of Step 5:
+Use a stateful agent workflow to control how answers are generated, verified, retried, or terminated — instead of blindly 
+returning LLM output.
+
+🔹 5.1 Generate → Verify → Decide
+What happens
+
+This is the main execution path of your LangGraph.
+
+Flow:
+
+User Query
+   ↓
+Generate Answer (RAG)
+   ↓
+Verify Answer (Step 4 verifier)
+   ↓
+Decide (based on verdict + confidence)
+
+In your code
+
+generate_node → calls run_rag()
+
+run_rag() internally:
+
+retrieves docs
+
+generates answer
+
+verifies answer
+
+returns verdict + confidence
+
+Why this matters
+
+Generation never bypasses verification
+
+Every answer is judged before being shown
+
+This removes “LLM said so” behavior
+
+📝 Note line:
+
+Step 5.1 ensures all answers pass through generation, verification, and decision stages in a controlled sequence.
+
+🔹 5.2 Conditional Regeneration
+What happens
+
+The graph decides whether to retry based on verification results.
+
+Logic:
+
+If confidence is high → accept answer
+
+If confidence is medium / low → regenerate or stop (based on rules)
+
+In your graph
+graph.add_conditional_edges(
+    "generate",
+    should_regenerate,
+    {
+        "retry": "generate",
+        "end": END
+    }
+)
+
+Current behavior
+
+Your test query returned:
+
+"confidence": "high"
+
+
+So the graph did NOT regenerate
+
+This confirms conditional logic works
+
+📝 Note line:
+
+Step 5.2 enables conditional retries, allowing the system to regenerate answers only when verification confidence is insufficient.
+
+🔹 5.3 Confidence-Aware Termination
+What happens
+
+The system knows when to stop.
+
+Termination is based on:
+
+verdict = ALL_SUPPORTED
+
+confidence = high
+
+When satisfied → graph exits cleanly.
+
+Output you saw
+{
+  'answer': 'The on-call engineer must respond within 15 minutes...',
+  'confidence': 'high'
+}
+
+
+This means:
+
+No retry loop
+
+No hallucinated padding
+
+No unnecessary LLM calls
+
+📝 Note line:
+
+Step 5.3 ensures the workflow terminates only when the answer meets grounding and confidence thresholds.
+
+🧠 Big Picture (1-line summary for notes)
+
+Step 5 introduces LangGraph-based control flow that orchestrates generation, verification, conditional retries, and confidence-based
+ termination.

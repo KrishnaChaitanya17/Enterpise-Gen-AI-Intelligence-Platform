@@ -1,0 +1,53 @@
+STEP 3 — MEMORY SYSTEM (Conversation Context)
+🎯 Purpose
+
+Handle follow-up questions and maintain conversation continuity.
+
+This is NOT vector DB memory.
+
+🧠 What Memory Stores
+
+Previous user questions
+
+Previous assistant answers
+
+Short-term context only
+
+Example:
+
+Q1: How do we handle outages?
+A1: Full explanation...
+
+Q2: What if it is not resolved?
+
+🔁 How it works
+
+Memory is injected into prompt:
+
+Previous conversation:
+<last Q&A>
+
+Current question:
+<new question>
+
+
+LLM understands implicit references
+
+🚨 Why this is critical
+
+Without memory:
+
+Q2: "If it is not resolved?"
+→ ❌ meaningless
+
+
+With memory:
+
+→ Correct escalation logic
+
+✅ Output of Step 3
+
+✔ Follow-up question handling
+✔ Context awareness
+✔ Human-like conversation
+✔ Still grounded in documents

@@ -1,0 +1,5 @@
+SLA Guidelines
+
+Critical issues must be acknowledged within 10 minutes.
+Resolution time for critical issues is 4 hours.
+Monthly uptime target is 99.9 percent.

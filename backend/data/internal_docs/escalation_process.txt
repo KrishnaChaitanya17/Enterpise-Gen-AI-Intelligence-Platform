@@ -1,0 +1,10 @@
+Escalation Process
+
+Level 1: Support Engineer
+Handles initial incident triage and basic troubleshooting.
+
+Level 2: Senior Engineer
+Engaged if the issue is not resolved within 30 minutes.
+
+Level 3: Incident Manager
+Coordinates cross-team resolution and external communication.

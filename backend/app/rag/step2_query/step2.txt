@@ -1,0 +1,10 @@
+What each file does:
+
+File	                                Responsibility
+
+retriever.py	                  Fetch relevant docs from vector DB
+prompt.py	                      Build structured prompt (query + context)
+guardrails.py	                  Prompt-level safety & constraints
+generator.py	                  Call LLM and generate answer
+citations.py	                  Attach sources to output
+rag_chain.py	                  Orchestrates the full RAG flow

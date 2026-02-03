@@ -1,0 +1,100 @@
+Purpose:
+Prepare documents for retrieval.
+
+What happens:
+
+Load raw files (data/internal_docs)
+
+Chunk text
+
+Generate embeddings
+
+Store vectors in FAISS (data/vectorstore)
+
+Output:
+✔ Vector DB (FAISS index)
+
+
+
+STEP 1 — RAG INGESTION PIPELINE (Offline / One-time)
+🎯 Purpose
+
+Convert raw enterprise documents into a searchable semantic knowledge base.
+
+This step runs:
+
+When documents are added/updated
+
+❌ NOT at query time
+
+📂 Input
+
+Internal documents (TXT / PDF / DOC)
+
+Example:
+
+outage_policy.txt
+
+sla_guidelines.txt
+
+escalation_process.txt
+
+⚙️ Sub-steps inside Step 1
+1.1 Document Loading
+
+Read files from disk
+
+Skip empty or invalid files
+
+Attach metadata:
+
+{
+  "source": "outage_policy.txt"
+}
+
+1.2 Chunking
+
+Large documents are split into small overlapping chunks
+
+Why?
+
+LLMs and embeddings work better on small text
+
+Improves retrieval precision
+
+Example:
+
+Chunk 1: Definition of outage
+Chunk 2: Response timeline
+Chunk 3: Escalation rules
+
+1.3 Embedding
+
+Each chunk → converted into a vector
+
+You used:
+
+OpenRouter-compatible embedding model
+
+Output:
+
+[0.012, -0.443, 0.991, ...]  # 3072-d vector
+
+1.4 Vector Store (FAISS)
+
+Store:
+
+(vector, text_chunk, metadata)
+
+
+Saved to disk:
+
+vectorstore/internal_docs/
+  ├─ index.faiss
+  └─ index.pkl
+
+✅ Output of Step 1
+
+✔ A persistent Vector Database
+✔ Ready for semantic search
+✔ No LLM involved yet

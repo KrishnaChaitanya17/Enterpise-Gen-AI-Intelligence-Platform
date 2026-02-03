@@ -1,0 +1,116 @@
+WHY STEP 4 EXISTS (Very Important)
+
+Even with RAG:
+
+LLMs can still over-generalize
+
+LLMs can mix facts
+
+LLMs can confidently lie
+
+So we add a Verifier Agent whose only job is:
+
+❝ Don’t trust the LLM. Verify it. ❞
+
+
+
+🔹 4.1 Claim Extraction
+
+File: claim_extractor.py
+
+Purpose:
+Break LLM answer into verifiable statements.
+
+Example
+
+Answer:
+
+“On-call engineer responds in 15 minutes and escalation happens in 30 minutes.”
+
+Extracted claims:
+
+Claim 1: On-call engineer responds in 15 minutes
+
+Claim 2: Escalation happens after 30 minutes
+
+✔ Easier to verify than whole paragraph
+
+🔹 4.2 Grounding Check (Evidence Matching)
+
+File: grounding_checker.py
+
+Purpose:
+Check whether each claim is supported by retrieved documents.
+
+Logic:
+
+Compare claim text with document chunks
+
+Use similarity / keyword overlap / embedding match
+
+Mark claim as:
+
+Supported
+
+Weakly supported
+
+Unsupported
+
+🔹 4.3 Verifier Agent (LLM-as-a-Judge)
+
+File: verifier_agent.py
+
+Purpose:
+Ask another LLM (or same LLM with strict prompt):
+
+“Is this answer fully supported by these sources?”
+
+Input:
+
+Generated answer
+
+Retrieved documents
+
+Output:
+
+{
+  "verdict": "PASS | FAIL | PARTIAL",
+  "reason": "Claim X not supported by doc Y"
+}
+
+🔹 4.4 Decision Engine
+
+File: decision_engine.py
+
+Purpose:
+Final authority on what to return to user.
+
+Rules:
+
+✅ PASS → Return answer
+
+⚠️ PARTIAL → Regenerate with stricter prompt
+
+❌ FAIL → Say “Insufficient evidence”
+
+🧠 HOW STEP 4 CONNECTS TO STEP 2
+
+Modify rag_chain.py like this:
+
+Step 2:
+  retrieve_docs()
+  build_prompt()
+  generate_answer()
+
+Step 4:
+  verify_answer()
+  approve / reject
+
+
+Final chain:
+
+run_rag()
+ ├── retrieve_docs
+ ├── generate_answer
+ ├── verify_answer   👈 STEP 4
+ └── return safe response

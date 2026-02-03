@@ -1,0 +1,9 @@
+
+It is a LLM Interaction layer
+
+This is model-facing logic:
+
+File	                  Role
+llm.py	               Model config & API call
+rag_prompt.py	       Prompt templates
+qa.py	               Question–Answer logic
