@@ -45,7 +45,7 @@ def generate_node(state):
 
 def regenerate_node(state):
     # For now, same pipeline (later we tweak prompt / k / retriever)
-    result = run_rag(state["query"])
+    result = run_rag_cached(state["query"])
     return {
         "answer": result["answer"],
         "verification": result["verification"],

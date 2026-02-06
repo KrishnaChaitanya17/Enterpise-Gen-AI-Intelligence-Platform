@@ -46,6 +46,7 @@ from app.rag.step4_verification.claim_extractor import extract_claims
 from app.rag.step4_verification.grounding_checker import is_claim_supported
 from app.rag.step4_verification.llm_verifier import llm_verify_claim
 
+
 def verify_answer(answer: str, docs: list) -> dict:
     """
     Step 4 Verifier Agent:

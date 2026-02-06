@@ -1,17 +1,17 @@
-from app.core.env import *
 import os
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-
-
-def get_embeddings():
-    return OpenAIEmbeddings(
-        model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-large"),
-    )
+from app.core.env import *
+from langchain_openai import ChatOpenAI
 
 
 def get_llm(temperature: float = 0.0):
+    model = os.getenv("CHAT_MODEL")
+
+    # 🔒 Hard safety guard
+    if not model or not model.strip():
+        model = "openrouter/openai/gpt-5.2-codex"
+
     return ChatOpenAI(
-        model=os.getenv("CHAT_MODEL", "openai/gpt-4o-mini"),
+        model=model,
         temperature=temperature,
     )
 
