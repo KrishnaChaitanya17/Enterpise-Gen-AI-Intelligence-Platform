@@ -32,5 +32,6 @@ SUPPORTED or NOT_SUPPORTED
     return {
         "claim": claim,
         "supported": response == "SUPPORTED",
-        "method": "llm"
+        "method": "llm",
+        "source": docs[0].metadata.get("source") if docs else None
     }

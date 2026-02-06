@@ -1,3 +1,24 @@
+STEP-4 (FINAL): HYBRID VERIFICATION
+Rule-based Grounding + LLM-based Verifier Agent
+
+LLM-based verifier adds:
+
+Semantic understanding
+
+Natural language reasoning
+
+Claim-by-claim judgement
+
+Explanation of why unsupported
+
+👉 Industry standard = Hybrid
+
+Fast rule-based check first
+
+LLM judge only when needed
+
+
+
 What is an LLM-Based Verifier Agent?
 
 An LLM-based verifier agent uses a separate LLM call whose only job is:
