@@ -1,0 +1,1 @@
+{"query": "What is the on-call response time during an outage?", "answer": "The on-call response time during an outage is 15 minutes.", "confidence": "high", "verdict": "ALL_SUPPORTED", "groundedness_score": 1.0, "retrieval_doc_count": 1, "regenerated": false, "timestamp": "2026-02-10 10:13:17.165320"}
