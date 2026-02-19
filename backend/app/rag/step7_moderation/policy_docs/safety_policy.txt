@@ -1,0 +1,9 @@
+Disallowed Content:
+- Instructions for hacking, exploitation, or bypassing safeguards
+- Violent or harmful instructions
+- Self-harm encouragement
+
+Allowed Content:
+- High-level explanations
+- Defensive security practices
+- Incident response procedures

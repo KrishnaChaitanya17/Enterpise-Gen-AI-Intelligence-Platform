@@ -51,7 +51,7 @@ def offline_analysis():
     for v, c in verdicts.items():
         print(f"  - {v}: {c}")
 
-
+# Provide a system health snapshot (CLI-style dashboard).
 def metrics_dashboard():
     logs = load_evaluation_logs()
 
@@ -67,8 +67,10 @@ def metrics_dashboard():
     print("=" * 40)
     for k, v in dashboard.items():
         print(f"{k:25}: {v}")
+        
 
-
+# Turn evaluation signals into optimization decisions
+# (No auto-changes yet — recommendations only)
 def optimization_recommendations():
     logs = load_evaluation_logs()
 

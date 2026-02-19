@@ -1,0 +1,7 @@
+Disallowed:
+- Personal data leakage
+- Credentials or secrets
+
+Allowed:
+- Anonymized examples
+- High-level data handling explanations
