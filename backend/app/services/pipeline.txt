@@ -1,0 +1,78 @@
+Client (Frontend / API)
+        │
+        ▼
+1️⃣ API Gateway (FastAPI)
+        │
+        ▼
+2️⃣ Request Logging + Trace ID
+        │
+        ▼
+3️⃣ Semantic Cache Check
+   ├─ Cache HIT → return answer
+   └─ Cache MISS → continue
+        │
+        ▼
+4️⃣ RAG Retrieval Layer
+   FAISS Vector Search
+   + Document Context
+        │
+        ▼
+5️⃣ LLM Generation
+   (via OpenRouter / LLM API)
+        │
+        ▼
+6️⃣ Verification Agent
+   Claim checking against sources
+        │
+        ▼
+7️⃣ Hallucination Guardrail
+   Blocks unsupported responses
+        │
+        ▼
+8️⃣ Multi-Agent Moderation
+   • Safety Agent
+   • Compliance Agent
+   • Privacy Agent
+        │
+        ▼
+9️⃣ AI Reasoning Layer
+   Agents:
+   • Planner Agent
+   • Risk Agent
+   • Critic Agent
+   • Business Rule Agent
+        │
+        ▼
+🔟 Fallback Protection
+   Handles:
+   • Empty answers
+   • Low confidence answers
+        │
+        ▼
+1️⃣1️⃣ Evaluation Layer
+   Computes:
+   • Groundedness
+   • Retrieval score
+   • Regeneration flag
+   • Quality score
+        │
+        ▼
+1️⃣2️⃣ Enterprise Trust Scoring
+   Combines:
+   • Truth score
+   • Quality score
+   • Risk score
+        │
+        ▼
+1️⃣3️⃣ Observability & Trace Storage
+   Saves:
+   • Query
+   • Answer
+   • Moderation
+   • Latency
+   • Trust score
+   to MongoDB
+        │
+        ▼
+1️⃣4️⃣ Response Delivery
+   Structured JSON response

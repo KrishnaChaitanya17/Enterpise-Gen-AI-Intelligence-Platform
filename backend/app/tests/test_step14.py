@@ -1,4 +1,4 @@
-from app.rag.step14_enterprise.pipeline import run_enterprise_pipeline
+from app.ai.orchestration.enterprise_pipeline import run_enterprise_pipeline
 
 verification = {"verdict": "ALL_SUPPORTED"}
 evaluation = {"groundedness": 1.0, "confidence": "high"}

@@ -1,4 +1,4 @@
-from app.rag.step2_query.rag_chain import run_rag
+from app.ai.step2_query.rag_chain import run_rag
 
 queries = [
     "How do we handle service outages?",

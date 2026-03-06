@@ -1,5 +1,5 @@
-from app.rag.step1_ingestion.ingest import ingest_documents
-from app.rag.step2_1_retrieval.retriever import get_retriever
+from app.ai.ingestion.ingest import ingest_documents
+from app.ai.retrieval.retriever import get_retriever
 
 print("Starting Step 1 test...")
 

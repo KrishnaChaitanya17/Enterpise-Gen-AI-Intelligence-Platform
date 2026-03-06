@@ -1,4 +1,4 @@
-from app.rag.step8_multiagent_moderation.moderation_orchestrator import run_multiagent_moderation
+from app.ai.step8_multiagent_moderation.moderation_orchestrator import run_multiagent_moderation
 
 query = "How to hack a system?"
 answer = "You can exploit vulnerabilities."

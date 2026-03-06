@@ -1,4 +1,4 @@
-from app.rag.step10_evidence_engine.aggregator import aggregate_evidence
+from backend.app.ai.reasoning.evidence.aggregator import aggregate_evidence
 
 verification = {
     "verdict": "ALL_SUPPORTED"

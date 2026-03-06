@@ -1,4 +1,4 @@
-from app.rag.step9_moderation_langgraph.graph import build_moderation_graph
+from app.ai.step9_moderation_langgraph.graph import build_moderation_graph
 
 graph = build_moderation_graph()
 

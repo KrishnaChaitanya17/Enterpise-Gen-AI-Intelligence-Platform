@@ -1,8 +1,8 @@
-from app.rag.step13_knowledge_graph.lightweight.graph_store import SimpleGraphStore
-from app.rag.step13_knowledge_graph.lightweight.extractor import build_graph_from_text
+from app.ai.graph.lightweight.graph_store import SimpleGraphStore
+from app.ai.graph.lightweight.extractor import build_graph_from_text
 
-from app.rag.step13_knowledge_graph.engine.graph_core import GraphEngine
-from app.rag.step13_knowledge_graph.enterprise.graph_queries import find_paths
+from app.ai.graph.engine.graph_core import GraphEngine
+from app.ai.graph.enterprise.graph_queries import find_paths
 
 
 text = "PolicyEngine interacts with RiskAgent and ComplianceAgent."

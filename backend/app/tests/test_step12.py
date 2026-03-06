@@ -1,5 +1,5 @@
-from app.rag.step10_evidence_engine.aggregator import aggregate_evidence
-from app.rag.step12_decision_langgraph.graph import build_decision_graph
+from backend.app.ai.reasoning.evidence.aggregator import aggregate_evidence
+from backend.app.ai.reasoning.decision_flow.graph import build_decision_graph
 
 verification = {"verdict": "ALL_SUPPORTED"}
 evaluation = {"groundedness": 1.0, "confidence": "high"}
