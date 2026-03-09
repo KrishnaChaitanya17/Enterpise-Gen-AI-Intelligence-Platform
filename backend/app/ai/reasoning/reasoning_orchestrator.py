@@ -41,6 +41,6 @@ async def run_decision_reasoning(evidence):
     # -----------------------------
     decision = aggregate_decisions(opinions)
 
-    decision["final_answer"] = final_answer
+    decision.final_answer = final_answer
 
     return decision

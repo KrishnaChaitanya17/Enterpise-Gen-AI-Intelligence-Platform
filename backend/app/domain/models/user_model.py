@@ -1,16 +1,23 @@
+from pydantic import BaseModel
+from typing import Optional
 from datetime import datetime
-from bson import ObjectId
 
 
-class UserModel:
+class UserModel(BaseModel):
 
-    @staticmethod
-    def build(email: str, password_hash: str, role: str, organization_id: ObjectId):
-        return {
-            "email": email,
-            "password_hash": password_hash,
-            "role": role,  # ADMIN | ANALYST | USER
-            "organization_id": organization_id,
-            "is_active": True,
-            "created_at": datetime.utcnow(),
-        }
+    id: Optional[str]
+    organization_id: str
+    email: str
+    password_hash: str
+
+    role: str = "DEVELOPER"
+
+    created_at: datetime = datetime.utcnow()
+
+class OrganizationUserModel(BaseModel):
+
+    id: Optional[str]
+
+    name: str
+
+    created_at: datetime = datetime.utcnow()

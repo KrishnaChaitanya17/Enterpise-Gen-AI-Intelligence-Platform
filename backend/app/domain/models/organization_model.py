@@ -27,3 +27,4 @@ class OrganizationModel:
             },
             "created_at": datetime.utcnow(),
         }
+    

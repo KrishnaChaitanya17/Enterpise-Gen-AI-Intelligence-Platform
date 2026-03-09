@@ -11,6 +11,7 @@ _embeddings = None
 
 
 def get_embeddings():
+
     global _embeddings
 
     if _embeddings is None:

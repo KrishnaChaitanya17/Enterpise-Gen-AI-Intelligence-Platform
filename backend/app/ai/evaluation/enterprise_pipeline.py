@@ -1,16 +1,9 @@
 def run_enterprise_pipeline(
     verification_result: dict,
-    evaluation_result: dict,
+    evaluation_result,
     moderation_result: dict
 ):
-    """
-    Enterprise-level risk and trust aggregation layer.
-    Combines verification, evaluation, and moderation outputs.
-    """
 
-    # -----------------------------
-    # 1️⃣ Normalize confidence
-    # -----------------------------
     confidence_label = verification_result.get("confidence", "low")
 
     confidence_mapping = {
@@ -21,21 +14,12 @@ def run_enterprise_pipeline(
 
     confidence = confidence_mapping.get(confidence_label, 0.3)
 
-    # -----------------------------
-    # 2️⃣ Extract verification metrics
-    # -----------------------------
     truth_score = float(verification_result.get("truth_score", 0.0))
     groundedness = float(verification_result.get("groundedness", 0.0))
 
-    # -----------------------------
-    # 3️⃣ Evaluation + Moderation
-    # -----------------------------
-    quality_score = float(evaluation_result.quality_score)
+    quality_score = float(getattr(evaluation_result, "quality_score", 0.0))
     risk_score = float(moderation_result.get("risk_score", 0.0))
 
-    # -----------------------------
-    # 4️⃣ Weighted enterprise formula
-    # -----------------------------
     trust_score = (
         (confidence * 0.25) +
         (truth_score * 0.25) +

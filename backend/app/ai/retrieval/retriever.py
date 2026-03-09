@@ -24,46 +24,69 @@ from app.ai.retrieval.hybrid_retriever import hybrid_retrieve
 from app.ai.retrieval.mmr import mmr
 
 
+# ------------------------------------------------
+# Retriever Class
+# ------------------------------------------------
+
 class HybridMMRRetriever:
+
     def __init__(self, k: int = 5, fetch_k: int = 15):
+
         self.k = k
         self.fetch_k = fetch_k
         self.embeddings = get_embeddings()
 
     def invoke(self, query: str):
-        # 1. Hybrid retrieval
+
+        # 1️⃣ Hybrid retrieval
         candidates = hybrid_retrieve(query, fetch_k=self.fetch_k)
 
         if not candidates:
             return []
 
-        # 2. Embeddings
+        # 2️⃣ Embeddings
         query_emb = self.embeddings.embed_query(query)
+
         doc_embs = self.embeddings.embed_documents(
             [d.page_content for d in candidates]
         )
 
-        # 3. MMR reranking
-        return mmr(
+        # 3️⃣ MMR reranking
+        reranked = mmr(
             query_emb,
             doc_embs,
             candidates,
             k=self.k
         )
 
-
-def get_retriever(k: int = 5, score_threshold: float = 0.0):
-    """
-    Returns a retriever object.
-    score_threshold kept for backward compatibility.
-    """
-    return HybridMMRRetriever(k=k)
+        return reranked
 
 
-# 🔹 THIS IS WHAT rag_chain EXPECTS
+# ------------------------------------------------
+# Singleton Retriever
+# ------------------------------------------------
+
+_retriever = None
+
+
+def get_retriever(k: int = 5):
+
+    global _retriever
+
+    if _retriever is None:
+        _retriever = HybridMMRRetriever(k=k)
+
+    return _retriever
+
+
+# ------------------------------------------------
+# Wrapper used by rag_chain
+# ------------------------------------------------
+
 def get_retrieved_docs(query: str, k: int = 5):
-    """
-    Convenience wrapper used by rag_chain.
-    """
-    retriever = get_retriever(k=k)
-    return retriever.invoke(query)
+
+    retriever = get_retriever(k)
+
+    docs = retriever.invoke(query)
+
+    return docs

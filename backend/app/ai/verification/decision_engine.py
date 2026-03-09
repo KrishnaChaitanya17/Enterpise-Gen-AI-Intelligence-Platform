@@ -1,23 +1,6 @@
-#Decide what user finally sees
-
-from app.ai.verification.grounding_checker import is_claim_supported
-
-
-def evaluate_claims(claims: list[str], docs: list) -> list[dict]:
-    """
-    Evaluate each claim against retrieved documents.
-    """
-    results = []
-
-    for claim in claims:
-        result = is_claim_supported(claim, docs)
-        results.append(result)
-
-    return results
-
-
 def finalize_response(answer: str, verification: dict) -> dict:
-    verdict = verification["verdict"]
+
+    verdict = verification.get("verdict")
 
     if verdict == "ALL_SUPPORTED":
         return {
@@ -28,19 +11,13 @@ def finalize_response(answer: str, verification: dict) -> dict:
 
     if verdict == "PARTIALLY_SUPPORTED":
         return {
-            "answer": (
-                "⚠️ The following answer is partially supported by the knowledge base:\n\n"
-                + answer
-            ),
+            "answer": answer,
             "confidence": "medium",
             "verification": verification
         }
 
     return {
-        "answer": (
-            "❌ I cannot verify this answer with the available documents. "
-            "Please rephrase or provide more context."
-        ),
+        "answer": answer,
         "confidence": "low",
         "verification": verification
     }

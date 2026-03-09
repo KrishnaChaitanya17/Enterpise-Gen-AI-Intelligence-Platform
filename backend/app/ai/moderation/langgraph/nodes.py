@@ -1,5 +1,5 @@
-from app.ai.step8_multiagent_moderation.moderation_orchestrator import run_multiagent_moderation
-from app.ai.step9_moderation_langgraph.audit_logger import log_audit
+from app.ai.moderation.multiagent.moderation_orchestrator import run_multiagent_moderation
+from app.ai.moderation.langgraph.audit_logger import log_audit
 
 
 def moderation_node(state):

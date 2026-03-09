@@ -33,20 +33,27 @@
 
 #step 5.2
 
-from app.ai.step2_query.rag_chain import run_rag
+from app.ai.retrieval.rag_chain import run_rag
 
-def generate_node(state):
-    result = run_rag(state["query"])
+
+async def generate_node(state):
+
+    result = await run_rag(state["query"])
+
     return {
+        "query": state["query"],
         "answer": result["answer"],
         "verification": result["verification"],
         "confidence": result["confidence"]
     }
 
-def regenerate_node(state):
-    # For now, same pipeline (later we tweak prompt / k / retriever)
-    result = run_rag_cached(state["query"])
+
+async def regenerate_node(state):
+
+    result = await run_rag(state["query"])
+
     return {
+        "query": state["query"],
         "answer": result["answer"],
         "verification": result["verification"],
         "confidence": result["confidence"]

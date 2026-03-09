@@ -1,5 +1,5 @@
 from app.ai.reasoning.evidence.schemas import EvidenceBundle
-from backend.app.ai.reasoning.evidence.risk_scoring import compute_risk
+from app.ai.reasoning.evidence.risk_scoring import compute_risk
 
 
 def aggregate_evidence(

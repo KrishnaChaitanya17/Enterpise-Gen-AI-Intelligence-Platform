@@ -1,7 +1,7 @@
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPBearer
 from app.core.security import decode_token
-from app.repositories.user_repository import user_repository
+from app.domain.repositories.user_repository import user_repository
 
 security = HTTPBearer()
 

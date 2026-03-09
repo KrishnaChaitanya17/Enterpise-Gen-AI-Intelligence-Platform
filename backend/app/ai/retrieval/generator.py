@@ -1,10 +1,15 @@
-import os
-from app.core.env import *   # ensures env vars are loaded
-from langchain_openai import ChatOpenAI
+from app.core.llm_client import get_llm
+
+_llm = None
+
 
 def generate_answer(prompt: str) -> str:
-    llm = ChatOpenAI(
-        model=os.getenv("CHAT_MODEL", "gpt-4o-mini"),
-        temperature=0.2
-    )
-    return llm.invoke(prompt).content
+
+    global _llm
+
+    if _llm is None:
+        _llm = get_llm(temperature=0.2)
+
+    response = _llm.invoke(prompt)
+
+    return response.content

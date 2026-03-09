@@ -1,6 +1,6 @@
 # This is policy-RAG reasoning, not keyword filtering.
-from backend.app.ai.moderation.policy.policy_retriever import load_policies
-from backend.app.ai.moderation.policy.schemas import ModerationResult
+from app.ai.moderation.policy.policy_retriever import load_policies
+from app.ai.moderation.policy.schemas import ModerationResult
 
 def moderate(query: str, answer: str) -> ModerationResult:
     policies = load_policies()

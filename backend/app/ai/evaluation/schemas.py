@@ -8,7 +8,8 @@ class EvaluationResult:
     query: str
     answer: str
     confidence: str
-    verdict: Optional[str]
+    # verdict: Optional[str]
+    verdict: str
     groundedness_score: float
     retrieval_doc_count: int
     regenerated: bool

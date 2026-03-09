@@ -27,6 +27,10 @@ def evaluate_response(
     # -----------------------------
     groundedness = compute_groundedness(verification)
 
+    # If no verification sources exist, allow model knowledge
+    if not verification.get("checks"):
+        groundedness = 0.6
+
     # -----------------------------
     # RETRIEVAL DOC COUNT
     # -----------------------------

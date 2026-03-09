@@ -38,7 +38,9 @@ async def run_rag(query: str):
     docs = get_retrieved_docs(query)
 
     # 2️⃣ Prepare context
-    context = "\n\n".join(d.page_content for d in docs)
+    context = "\n\n".join(
+        d.page_content for d in docs
+    ) if docs else "No relevant documents found."
 
     # 3️⃣ Build prompt
     prompt = ANSWER_PROMPT.format(

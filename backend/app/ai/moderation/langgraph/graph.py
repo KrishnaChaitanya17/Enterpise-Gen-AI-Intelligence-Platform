@@ -1,6 +1,6 @@
 from langgraph.graph import StateGraph, END
-from app.ai.step9_moderation_langgraph.state import ModerationState
-from app.ai.step9_moderation_langgraph.nodes import (
+from app.ai.moderation.langgraph.state import ModerationState
+from app.ai.moderation.langgraph.nodes import (
     moderation_node,
     redaction_node,
     human_review_node,

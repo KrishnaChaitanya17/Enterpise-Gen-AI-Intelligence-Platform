@@ -14,7 +14,6 @@ class InteractionRepository:
     async def get_history(
         self,
         user_id: Optional[str] = None,
-        status: Optional[str] = None,
         skip: int = 0,
         limit: int = 20,
     ) -> List[dict]:
@@ -24,32 +23,46 @@ class InteractionRepository:
         if user_id:
             query["user_id"] = user_id
 
-        if status:
-            query["enterprise.execution_status"] = status
-
         cursor = (
             db.interactions
             .find(query)
-            .sort("timestamp", -1)
+            .sort("created_at", -1)
             .skip(skip)
             .limit(limit)
         )
 
         return await cursor.to_list(length=limit)
 
-    async def count(self, query: dict):
-        return await db.interactions.count_documents(query)
+    # ✅ used by /chat/history
+    @staticmethod
+    async def get_user_history(user_id: str, organization_id: Optional[str]):
+
+        query = {
+            "user_id": user_id
+        }
+
+        # only filter if valid org_id exists
+        if organization_id and organization_id != "None":
+            query["organization_id"] = organization_id
+
+        cursor = db.interactions.find(query).sort("created_at", -1)
+
+        print("History query:", query)
+
+        return [doc async for doc in cursor]
+
+    # ✅ used by conversation view
+    @staticmethod
+    async def get_conversation(conversation_id: str, user_id: str):
+
+        cursor = db.interactions.find(
+            {
+                "conversation_id": conversation_id,
+                "user_id": user_id
+            }
+        ).sort("created_at", 1)
+
+        return [doc async for doc in cursor]
 
 
 interaction_repository = InteractionRepository()
-
-
-# Because:
-
-# API layer shouldn’t touch DB directly
-
-# Makes unit testing easy
-
-# Scalable architecture
-
-# Enterprise standard pattern
