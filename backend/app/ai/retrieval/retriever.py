@@ -19,7 +19,7 @@
 #         }
 #     )
 
-from app.core.embeddings import get_embeddings
+from app.core.embeddings import get_embedding_model
 from app.ai.retrieval.hybrid_retriever import hybrid_retrieve
 from app.ai.retrieval.mmr import mmr
 
@@ -34,7 +34,7 @@ class HybridMMRRetriever:
 
         self.k = k
         self.fetch_k = fetch_k
-        self.embeddings = get_embeddings()
+        self.embeddings = get_embedding_model()
 
     def invoke(self, query: str):
 

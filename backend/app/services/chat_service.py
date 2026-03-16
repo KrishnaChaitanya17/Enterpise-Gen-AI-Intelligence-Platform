@@ -51,6 +51,15 @@ class ChatService:
         print("✅ Interaction saved:", interaction)
 
         return result
+    
+    async def stream_answer(self,query, user_id, organization_id):
+
+        async for token in ai_pipeline.stream(
+            query=query,
+            user_id=user_id,
+            organization_id=organization_id
+        ):
+            yield token
 
 
 chat_service = ChatService()

@@ -1,37 +1,68 @@
-from sentence_transformers import SentenceTransformer
-import numpy as np
-import faiss
+# from sentence_transformers import SentenceTransformer
+# import numpy as np
+# import faiss
 
-_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+# _model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 
-dimension = 384
-index = faiss.IndexFlatL2(dimension)
+# dimension = 384
+# index = faiss.IndexFlatL2(dimension)
 
-cache_questions = []
-cache_answers = []
+# cache_questions = []
+# cache_answers = []
 
 
-def search_cache(query, threshold=0.85):
+# def search_cache(query, threshold=0.85):
 
-    if not cache_questions:
-        return None
+#     if not cache_questions:
+#         return None
 
-    embedding = _model.encode([query])
-    D, I = index.search(np.array(embedding).astype("float32"), 1)
+#     embedding = _model.encode([query])
+#     D, I = index.search(np.array(embedding).astype("float32"), 1)
 
-    similarity = 1 / (1 + D[0][0])
+#     similarity = 1 / (1 + D[0][0])
 
-    if similarity > threshold:
-        return cache_answers[I[0][0]]
+#     if similarity > threshold:
+#         return cache_answers[I[0][0]]
+
+#     return None
+
+
+# def add_to_cache(query, answer):
+
+#     embedding = _model.encode([query])
+
+#     index.add(np.array(embedding).astype("float32"))
+
+#     cache_questions.append(query)
+#     cache_answers.append(answer)
+
+import json
+import hashlib
+from app.core.redis_client import redis_client
+
+
+def _hash_query(query: str):
+    return hashlib.sha256(query.lower().strip().encode()).hexdigest()
+
+
+def search_cache(query: str):
+
+    key = f"ai_cache:{_hash_query(query)}"
+
+    cached = redis_client.get(key)
+
+    if cached:
+        return json.loads(cached)
 
     return None
 
 
-def add_to_cache(query, answer):
+def add_to_cache(query: str, answer: str):
 
-    embedding = _model.encode([query])
+    key = f"ai_cache:{_hash_query(query)}"
 
-    index.add(np.array(embedding).astype("float32"))
-
-    cache_questions.append(query)
-    cache_answers.append(answer)
+    redis_client.setex(
+        key,
+        3600,
+        json.dumps(answer)
+    )

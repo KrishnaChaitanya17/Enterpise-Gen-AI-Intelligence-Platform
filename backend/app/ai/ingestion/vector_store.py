@@ -1,5 +1,5 @@
 from langchain_community.vectorstores import FAISS
-from app.ai.ingestion.embedder import get_embeddings
+from app.ai.ingestion.embedder import load_embeddings
 import os
 
 VECTOR_DB_PATH = "vectorstore/internal_docs"
@@ -11,7 +11,7 @@ def save_vector_db(vector_db, path: str = VECTOR_DB_PATH):
 
 
 def load_vector_db(path: str = VECTOR_DB_PATH):
-    embeddings = get_embeddings()
+    embeddings = load_embeddings()
     return FAISS.load_local(
         path,
         embeddings,

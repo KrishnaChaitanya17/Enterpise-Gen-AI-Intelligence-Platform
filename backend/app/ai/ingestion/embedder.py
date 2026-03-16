@@ -7,8 +7,7 @@
 #         model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-large"),
 #     )
 
-from app.core.embeddings import get_embeddings
+from app.core.embeddings import get_embedding_model
 
-
-def get_embedding_model():
-    return get_embeddings()
+def load_embeddings():
+    return get_embedding_model()

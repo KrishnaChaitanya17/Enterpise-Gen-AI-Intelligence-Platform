@@ -57,12 +57,12 @@ async def stream_chat(
 
     async def event_generator():
 
-        async for chunk in chat_service.stream_answer(
-            query=payload.query,
-            user_id=user["user_id"],
-            organization_id=org_id
+        async for token in chat_service.stream_answer(
+            payload.query,
+            user["user_id"],
+            org_id
         ):
-            yield f"data: {chunk}\n\n"
+            yield f"data: {token}\n\n"
 
     return StreamingResponse(
         event_generator(),

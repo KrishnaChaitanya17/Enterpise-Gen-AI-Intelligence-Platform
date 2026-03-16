@@ -7,10 +7,16 @@ db = client["enterprise_ai"]
 
 trace_collection = db["ai_traces"]
 
-trace_store = []
+# In-memory store for analytics
+TRACE_STORE = []
+
+# 👇 ADD THIS LINE
+trace_store = TRACE_STORE
+
 
 def save_trace(trace):
-    trace_store.append(trace)
+
+    TRACE_STORE.append(trace)
 
     trace_collection.insert_one({
         "trace_id": trace.trace_id,

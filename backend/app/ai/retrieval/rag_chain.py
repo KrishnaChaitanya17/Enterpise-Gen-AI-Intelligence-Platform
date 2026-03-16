@@ -31,6 +31,7 @@ from app.core.llm_client import get_llm
 from app.ai.retrieval.retriever import get_retrieved_docs
 from app.ai.retrieval.prompts import ANSWER_PROMPT
 from app.ai.verification.verifier_agent import verify_answer
+from app.ai.retrieval.source_formatter import format_sources
 
 async def run_rag(query: str):
 
@@ -59,7 +60,7 @@ async def run_rag(query: str):
     return {
         "query": query,
         "answer": answer,
-        "sources": docs,
+        "sources": format_sources(docs),
         "verification": verification,
         "confidence": verification["confidence"],
     }
