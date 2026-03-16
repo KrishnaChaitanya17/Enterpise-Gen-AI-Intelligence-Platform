@@ -9,6 +9,14 @@ def get_llm(query: str = " ",temperature: float = 0.0, streaming: bool = False,m
 
     models = route_model(query)
 
+    fallback_models = [
+        "openai/gpt-4o-mini",
+        "deepseek/deepseek-chat",
+        "mistralai/mistral-7b-instruct"
+    ]
+
+    models = models + fallback_models
+
     api_key = os.getenv("OPENROUTER_API_KEY")
     api_base = os.getenv("OPENROUTER_API_BASE")
 

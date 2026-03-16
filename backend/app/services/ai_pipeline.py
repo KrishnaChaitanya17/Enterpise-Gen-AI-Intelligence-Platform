@@ -19,6 +19,7 @@ from app.domain.repositories.interaction_repository import InteractionRepository
 from app.core.llm_client import get_llm
 from app.ai.memory.conversation_memory import ConversationMemory
 from app.ai.observability.tracer import TraceSpan
+from app.core.circuit_breaker import llm_breaker
 
 from app.ai.agents.agent_graph import run_agent_system
 
@@ -138,11 +139,15 @@ User question:
 """
 
             with TraceSpan(trace_id, "rag_retrieval"):
-                rag_result = await run_agent_system(query)
+                rag_result = await run_agent_system(augmented_query)
 
-            answer = rag_result.get("answer") or ""
-            sources = rag_result.get("sources") or []
-            verification_result = rag_result.get("verification") or {}
+            answer = rag_result.get("answer", "")
+            sources = rag_result.get("sources", []) 
+            verification_result = rag_result.get("verification") or {
+                "confidence": "medium",
+                "verdict": "UNKNOWN",
+                "checks": []
+            }
 
             # ---------------------------------
             # 2️⃣ LLM Fallback
@@ -166,7 +171,10 @@ User question:
             Answer clearly:
             """
 
-                    response = await llm.ainvoke(prompt)
+                    response = await llm_breaker.call_async(
+                        llm.ainvoke,
+                        prompt
+                    )
 
                 answer = getattr(response, "content", str(response)).strip()
 
@@ -344,12 +352,29 @@ User question:
 
         try:
 
-            rag_result = await run_agent_system(query)
+            memory = self.memory_store.get(user_id)
+
+            conversation_context = ""
+            if memory:
+                conversation_context = memory.get_context()
+
+            augmented_query = f"""
+            Conversation history:
+            {conversation_context}
+
+            User question:
+            {query}
+            """
+
+            rag_result = await run_agent_system(augmented_query)
 
             sources = rag_result.get("sources") or []
 
             context = "\n".join(
-                [s.page_content for s in sources]
+                [
+                    getattr(s, "page_content", str(s))
+                    for s in sources
+                ]
             )
 
             prompt = f"""
@@ -363,7 +388,22 @@ Question:
 
 Answer clearly:
 """
+            trace = AITrace(
+                trace_id=trace_id,
+                user_id=user_id,
+                organization_id=organization_id,
+                query=query,
+                answer="STREAMED_RESPONSE",
+                verification={},
+                moderation={},
+                evaluation={},
+                enterprise={"decision":"STREAM"},
+                latency=0,
+                timestamp=datetime.utcnow()
+            )
 
+            save_trace(trace)
+            
             async for chunk in llm.astream(prompt):
 
                 token = getattr(chunk, "content", None)

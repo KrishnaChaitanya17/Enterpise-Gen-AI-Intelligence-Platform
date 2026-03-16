@@ -1,44 +1,20 @@
-import math
-import re
-
-
-def calculator_tool(expression: str):
-
-    try:
-        result = eval(expression)
-        return str(result)
-
-    except Exception:
-        return "Invalid calculation"
-
-
-def extract_math(query: str):
-
-    pattern = r"[0-9\.\+\-\*\/\(\) ]+"
-
-    matches = re.findall(pattern, query)
-
-    for m in matches:
-        if any(op in m for op in ["+", "-", "*", "/"]):
-            return m.strip()
-
-    return None
+from app.ai.tools.tool_registry import get_tool
 
 
 async def tool_agent(query: str):
 
-    expression = extract_math(query)
+    if "calculate" in query or "+" in query or "*" in query:
 
-    if expression:
+        tool = get_tool("calculator")
 
-        result = calculator_tool(expression)
+        result = tool(query)
 
         return {
-            "answer": f"Calculation result: {result}",
-            "source": "tool_agent"
+            "answer": result,
+            "tool_used": "calculator"
         }
 
     return {
-        "answer": "No valid tool found for this query.",
-        "source": "tool_agent"
+        "answer": None,
+        "tool_used": None
     }

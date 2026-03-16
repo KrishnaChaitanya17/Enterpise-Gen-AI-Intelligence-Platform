@@ -1,18 +1,12 @@
-from collections import deque
+conversation_store = []
 
-class ConversationMemory:
-    def __init__(self, max_turns=5):
-        self.history = deque(maxlen=max_turns)
+def get_conversation(session_id):
 
-    def add(self, user_query: str, answer: str):
-        self.history.append({
-            "question": user_query,
-            "answer": answer
-        })
+    return conversation_store.get(session_id, [])
 
-    def get_context(self) -> str:
-        context = ""
-        for turn in self.history:
-            context += f"User: {turn['question']}\n"
-            context += f"Assistant: {turn['answer']}\n"
-        return context
+def add_message(session_id, message):
+
+    if session_id not in conversation_store:
+        conversation_store[session_id] = []
+
+    conversation_store[session_id].append(message)
