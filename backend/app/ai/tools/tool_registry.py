@@ -1,7 +1,7 @@
-from app.ai.agents.tool_agent import calculator
+from app.ai.tools.calculator_tool import calculator_tool
 
 TOOLS = {
-    "calculator" : calculator
+    "calculator": calculator_tool
 }
 
 def get_tool(tool_name: str):

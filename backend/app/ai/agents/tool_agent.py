@@ -1,7 +1,5 @@
-from app.ai.tools.tool_registry import get_tool
-
-
 async def tool_agent(query: str):
+    from app.ai.tools.tool_registry import get_tool
 
     if "calculate" in query or "+" in query or "*" in query:
 

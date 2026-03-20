@@ -1,14 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from typing import Optional
+
 from app.core.security import get_current_user
 from app.services.chat_service import chat_service
 from app.domain.repositories.interaction_repository import InteractionRepository
 from app.utils.mongo_utils import serialize_mongo
-import inspect
-
-print("ChatService loaded from:", inspect.getfile(chat_service.__class__))
-print("ChatService.ask signature:", inspect.signature(chat_service.ask))
 
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
@@ -22,45 +20,31 @@ class ChatRequest(BaseModel):
 # Ask Chat
 # ------------------------------
 @router.post("/ask")
-async def ask_chat(
-    payload: ChatRequest,
-    user=Depends(get_current_user)
-):
+async def ask_chat(payload: ChatRequest, user=Depends(get_current_user)):
 
-    org_id = user.get("organization_id")
+    org_id = user.get("organization_id") or None
 
-    if org_id in ["None", "", None]:
-        org_id = None
-
-    response = await chat_service.ask(
+    return await chat_service.ask(
         query=payload.query,
         user_id=user["user_id"],
-        organization_id=org_id
+        organization_id=org_id,
     )
 
-    return response
-
 
 # ------------------------------
-# Streaming Chat (Real-time)
+# Streaming Chat
 # ------------------------------
 @router.post("/stream")
-async def stream_chat(
-    payload: ChatRequest,
-    user=Depends(get_current_user)
-):
+async def stream_chat(payload: ChatRequest, user=Depends(get_current_user)):
 
-    org_id = user.get("organization_id")
-
-    if org_id in ["None", "", None]:
-        org_id = None
+    org_id = user.get("organization_id") or None
 
     async def event_generator():
-
         async for token in chat_service.stream_answer(
             payload.query,
             user["user_id"],
-            org_id
+            org_id,
+            payload.conversation_id
         ):
             yield f"data: {token}\n\n"
 
@@ -81,21 +65,14 @@ async def get_history(user=Depends(get_current_user)):
         organization_id=user.get("organization_id")
     )
 
-    history = serialize_mongo(history)
-
-    return {
-        "history": history
-    }
+    return {"history": serialize_mongo(history)}
 
 
 # ------------------------------
 # Conversation Details
 # ------------------------------
 @router.get("/conversation/{conversation_id}")
-async def get_conversation(
-    conversation_id: str,
-    user=Depends(get_current_user)
-):
+async def get_conversation(conversation_id: str, user=Depends(get_current_user)):
 
     convo = await InteractionRepository.get_conversation(
         conversation_id,
@@ -103,17 +80,9 @@ async def get_conversation(
     )
 
     if not convo:
-        raise HTTPException(
-            status_code=404,
-            detail="Conversation not found"
-        )
+        raise HTTPException(status_code=404, detail="Not found")
 
-    convo = serialize_mongo(convo)
-
-    return {
-        "conversation": convo
-    }
-
+    return {"conversation": serialize_mongo(convo)}
 
 # /chat/ask
 #  → chat_service.ask()

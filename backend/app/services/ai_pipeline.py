@@ -4,7 +4,6 @@ import asyncio
 from datetime import datetime
 from typing import Optional
 
-from app.ai.retrieval.rag_chain import run_rag
 from app.ai.reasoning.reasoning_orchestrator import run_decision_reasoning
 from app.ai.evaluation.evaluator import evaluate_response
 from app.ai.evaluation.enterprise_pipeline import run_enterprise_pipeline
@@ -21,16 +20,17 @@ from app.ai.memory.conversation_memory import ConversationMemory
 from app.ai.observability.tracer import TraceSpan
 from app.core.circuit_breaker import llm_breaker
 
-from app.ai.agents.agent_graph import run_agent_system
+# ✅ AGENT SYSTEM (Phase 2)
+from app.ai.agents.langgraph.graph_builder import run_agent_graph
 
 
 # --------------------------------------------------
 # Helper: detect weak answers
 # --------------------------------------------------
 
-def is_bad_answer(answer: str):
+def is_bad_answer(answer):
 
-    if not answer:
+    if not isinstance(answer, str):
         return True
 
     text = answer.lower().strip()
@@ -48,11 +48,7 @@ def is_bad_answer(answer: str):
     if len(text) < 20:
         return True
 
-    for pattern in bad_patterns:
-        if pattern in text:
-            return True
-
-    return False
+    return any(p in text for p in bad_patterns)
 
 
 class AIPipeline:
@@ -90,8 +86,6 @@ class AIPipeline:
 
             if cached_answer:
 
-                logger.info(f"TRACE_ID={trace_id} | Cache HIT")
-
                 latency = time.time() - start_time
 
                 enterprise_result = {
@@ -99,7 +93,7 @@ class AIPipeline:
                     "decision": "CACHE_RESPONSE"
                 }
 
-                trace = AITrace(
+                save_trace(AITrace(
                     trace_id=trace_id,
                     user_id=user_id,
                     organization_id=organization_id,
@@ -111,9 +105,7 @@ class AIPipeline:
                     enterprise=enterprise_result,
                     latency=latency,
                     timestamp=datetime.utcnow()
-                )
-
-                save_trace(trace)
+                ))
 
                 return {
                     "trace_id": trace_id,
@@ -124,10 +116,8 @@ class AIPipeline:
                     "enterprise": enterprise_result
                 }
 
-            logger.info(f"TRACE_ID={trace_id} | Cache MISS")
-
             # ---------------------------------
-            # 1️⃣ RAG Retrieval
+            # 1️⃣ AGENT SYSTEM (FIXED)
             # ---------------------------------
 
             augmented_query = f"""
@@ -138,61 +128,71 @@ User question:
 {query}
 """
 
-            with TraceSpan(trace_id, "rag_retrieval"):
-                rag_result = await run_agent_system(augmented_query)
+            with TraceSpan(trace_id, "agent_execution"):
+                agent_result = await run_agent_graph(augmented_query)
+                
+                # ✅ HANDLE BOTH dict and string
+                if isinstance(agent_result, dict):
+                    answer = agent_result.get("answer", "")
+                    sources = agent_result.get("sources", [])
+                    verification_result = agent_result.get("verification", {
+                        "confidence": "medium",
+                        "verdict": "UNKNOWN",
+                        "checks": []
+                    })
+                else:
+                    answer = str(agent_result)
+                    sources = []
+                    verification_result = {
+                        "confidence": "medium",
+                        "verdict": "UNKNOWN",
+                        "checks": []
+                    }
 
-            answer = rag_result.get("answer", "")
-            sources = rag_result.get("sources", []) 
-            verification_result = rag_result.get("verification") or {
-                "confidence": "medium",
-                "verdict": "UNKNOWN",
-                "checks": []
-            }
+                # ✅ FINAL SAFETY
+                if not isinstance(answer, str):
+                    answer = str(answer)
+                
 
             # ---------------------------------
-            # 2️⃣ LLM Fallback
+            # 2️⃣ LLM FALLBACK (SAFE)
             # ---------------------------------
 
-            if not sources or is_bad_answer(answer):
-                logger.info(f"TRACE_ID={trace_id} | Using LLM fallback")
+            if not answer or is_bad_answer(answer):
+
+                logger.info(f"TRACE_ID={trace_id} | LLM fallback triggered")
 
                 with TraceSpan(trace_id, "llm_fallback"):
 
                     llm = get_llm()
 
-                    prompt = f"""
-            You are a knowledgeable AI assistant.
+                    try:
+                        response = await llm.ainvoke(query)
+                    except Exception as e:
+                        logger.error(f"LLM failure: {e}")
+                        raise
 
-            Provide a clear explanation.
+                answer = getattr(response, "content", None)
 
-            User question:
-            {query}
+                if not answer:
+                    answer = str(response)
 
-            Answer clearly:
-            """
-
-                    response = await llm_breaker.call_async(
-                        llm.ainvoke,
-                        prompt
-                    )
-
-                answer = getattr(response, "content", str(response)).strip()
-
+                answer = answer.strip()
+            
                 verification_result = {
                     "verdict": "UNVERIFIED",
                     "confidence": "medium",
                     "checks": []
                 }
 
-                # Track LLM cost
                 track_cost(
                     model=llm.model_name,
-                    prompt=prompt,
+                    prompt=query,
                     response=answer
                 )
 
             # ---------------------------------
-            # 3️⃣ Parallel AI Checks
+            # 3️⃣ PARALLEL AI CHECKS
             # ---------------------------------
 
             reasoning_input = {
@@ -205,9 +205,7 @@ User question:
             with TraceSpan(trace_id, "parallel_ai_checks"):
 
                 hallucination_task = hallucination_guard(
-                    query,
-                    answer,
-                    sources
+                    query, answer, sources
                 )
 
                 moderation_task = asyncio.to_thread(
@@ -216,9 +214,7 @@ User question:
                     answer
                 )
 
-                reasoning_task = run_decision_reasoning(
-                    reasoning_input
-                )
+                reasoning_task = run_decision_reasoning(reasoning_input)
 
                 guard_ok, moderation_result, reasoning_result = await asyncio.gather(
                     hallucination_task,
@@ -226,60 +222,59 @@ User question:
                     reasoning_task
                 )
 
-            if not guard_ok:
-                logger.warning(
-                    f"TRACE_ID={trace_id} | Hallucination risk detected"
-                )
+            moderation_flag = False
 
             if moderation_result.get("final_verdict") == "BLOCK":
+                moderation_flag = True
 
-                logger.warning(
-                    f"TRACE_ID={trace_id} | Moderation BLOCK"
-                )
-
-                answer = "This response was blocked by the moderation system."
+                logger.warning(f"TRACE_ID={trace_id} | Moderation flagged content")
 
             final_answer = getattr(reasoning_result, "final_answer", None) or answer
 
-            memory.add(query, final_answer)
-
-            # ---------------------------------
-            # 4️⃣ Evaluation
-            # ---------------------------------
-
-            with TraceSpan(trace_id, "evaluation"):
-
-                evaluation_result = evaluate_response(
-                    query=query,
-                    answer=final_answer,
-                    verification=verification_result,
-                    confidence=verification_result.get("confidence", "low"),
-                    sources=sources
+            if moderation_flag:
+                final_answer = (
+                    "This topic may involve sensitive or evolving informartion.\n\n"
+                    + final_answer
                 )
 
+            memory.add(query, final_answer[:1000])
+
+            logger.info(f"Moderation result: {moderation_result}")
+
+            if not isinstance(agent_result.get("verification"), dict):
+                agent_result["verification"] = {
+                    "verdict": "UNKNOWN",
+                    "confidence": "low",
+                    "checks": []
+                }
+
             # ---------------------------------
-            # 5️⃣ Enterprise Trust
+            # 4️⃣ EVALUATION
             # ---------------------------------
 
-            with TraceSpan(trace_id, "enterprise_trust"):
-
-                enterprise_result = run_enterprise_pipeline(
-                    verification_result,
-                    evaluation_result,
-                    moderation_result
-                )
-
-            logger.info(
-                f"TRACE_ID={trace_id} | Enterprise decision: {enterprise_result}"
+            evaluation_result = evaluate_response(
+                query=query,
+                answer=final_answer,
+                verification=verification_result,
+                confidence=verification_result.get("confidence", "low"),
+                sources=sources
             )
 
             # ---------------------------------
-            # 6️⃣ Save Interaction
+            # 5️⃣ ENTERPRISE TRUST
             # ---------------------------------
 
-            repo = InteractionRepository()
+            enterprise_result = run_enterprise_pipeline(
+                verification_result,
+                evaluation_result,
+                moderation_result
+            )
 
-            await repo.save({
+            # ---------------------------------
+            # 6️⃣ SAVE
+            # ---------------------------------
+
+            await InteractionRepository().save({
                 "trace_id": trace_id,
                 "conversation_id": conversation_id,
                 "organization_id": organization_id,
@@ -290,16 +285,12 @@ User question:
                 "created_at": datetime.utcnow()
             })
 
-            # ---------------------------------
-            # 7️⃣ Cache High Trust
-            # ---------------------------------
-
-            if enterprise_result.get("trust_score", 0) > 0.7:
+            if enterprise_result.get("trust_score", 0) > 0.7 and len(final_answer) < 2000:
                 add_to_cache(query, final_answer)
 
             latency = time.time() - start_time
 
-            trace = AITrace(
+            save_trace(AITrace(
                 trace_id=trace_id,
                 user_id=user_id,
                 organization_id=organization_id,
@@ -311,9 +302,7 @@ User question:
                 enterprise=enterprise_result,
                 latency=latency,
                 timestamp=datetime.utcnow()
-            )
-
-            save_trace(trace)
+            ))
 
             return {
                 "trace_id": trace_id,
@@ -324,9 +313,9 @@ User question:
                 "enterprise": enterprise_result
             }
 
-        except Exception:
+        except Exception as e:
 
-            logger.exception(f"TRACE_ID={trace_id} | Pipeline failure")
+            logger.exception(f"TRACE_ID={trace_id} | Pipeline failure: {e}")
 
             return {
                 "trace_id": trace_id,
@@ -341,80 +330,27 @@ User question:
             }
 
     # --------------------------------------------------
-    # Streaming Mode
+    # STREAM (FIXED)
     # --------------------------------------------------
 
     async def stream(self, query: str, user_id: str, organization_id=None):
 
-        llm = get_llm(query=query, streaming=True)
-
         trace_id = str(uuid.uuid4())
 
         try:
+            result = await run_agent_system(query)
 
-            memory = self.memory_store.get(user_id)
+            if isinstance(result, dict):
+                answer = result.get("answer", "")
+            else:
+                answer = str(result)
 
-            conversation_context = ""
-            if memory:
-                conversation_context = memory.get_context()
-
-            augmented_query = f"""
-            Conversation history:
-            {conversation_context}
-
-            User question:
-            {query}
-            """
-
-            rag_result = await run_agent_system(augmented_query)
-
-            sources = rag_result.get("sources") or []
-
-            context = "\n".join(
-                [
-                    getattr(s, "page_content", str(s))
-                    for s in sources
-                ]
-            )
-
-            prompt = f"""
-Use the following context to answer.
-
-Context:
-{context}
-
-Question:
-{query}
-
-Answer clearly:
-"""
-            trace = AITrace(
-                trace_id=trace_id,
-                user_id=user_id,
-                organization_id=organization_id,
-                query=query,
-                answer="STREAMED_RESPONSE",
-                verification={},
-                moderation={},
-                evaluation={},
-                enterprise={"decision":"STREAM"},
-                latency=0,
-                timestamp=datetime.utcnow()
-            )
-
-            save_trace(trace)
-            
-            async for chunk in llm.astream(prompt):
-
-                token = getattr(chunk, "content", None)
-
-                if token:
-                    yield token
+            for token in answer.split():
+                yield token + " "
+                await asyncio.sleep(0.02)
 
         except Exception as e:
-
             logger.exception(f"Streaming error: {e}")
-
             yield "Streaming failed."
 
 

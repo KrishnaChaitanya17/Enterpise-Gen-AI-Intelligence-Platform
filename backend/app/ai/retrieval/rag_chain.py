@@ -1,66 +1,52 @@
-# # app/rag/step2_query/rag_chain.py
-
-# from app.rag.step2_query.retriever import retrieve_docs
-# from app.rag.step2_query.prompt import build_prompt
-# from app.rag.step2_query.generator import generate_answer
-
-# from app.rag.step4_verification.verifier_agent import verify_answer
-# from app.rag.step4_verification.decision_engine import finalize_response
-
-# def run_rag(query: str):
-#     docs = retrieve_docs(query)
-
-#     if not docs:
-#         return {
-#             "answer": "I don’t have enough information to answer this.",
-#             "sources": []
-#         }
-
-#     prompt = build_prompt(query, docs)
-#     answer = generate_answer(prompt)
-
-#     verification = verify_answer(answer, docs)
-#     final_response = finalize_response(answer, verification)
-
-#     final_response["sources"] = docs
-#     return final_response
-
-# app/rag/step2_query/rag_chain.py
-
 from app.core.llm_client import get_llm
-from app.ai.retrieval.retriever import get_retrieved_docs
-from app.ai.retrieval.prompts import ANSWER_PROMPT
 from app.ai.verification.verifier_agent import verify_answer
 from app.ai.retrieval.source_formatter import format_sources
+from app.ai.retrieval.hybrid_retriever import hybrid_search, extract_filters
 
-async def run_rag(query: str):
+async def run_rag(query: str, filters: dict = None):
 
     # 1️⃣ Retrieve documents
-    docs = get_retrieved_docs(query)
+    filters = extract_filters(query)
+    all_docs = hybrid_search(query, k=5, filters=filters)
 
     # 2️⃣ Prepare context
     context = "\n\n".join(
-        d.page_content for d in docs
-    ) if docs else "No relevant documents found."
-
-    # 3️⃣ Build prompt
-    prompt = ANSWER_PROMPT.format(
-        question=query,
-        context=context
+        [d.page_content for d in all_docs[:5]]
     )
 
-    # 4️⃣ Generate answer
-    llm = get_llm()
-    response = await llm.ainvoke(prompt)   # 🔥 async version
-    answer = response.content
+    # 3️⃣ Build prompt
+    prompt = f"""
+You are a helpful AI assistant.
 
-    # 5️⃣ Verification
-    verification = verify_answer(answer, docs)
+Answer the question clearly and concisely.
+
+Context:
+{context}
+
+Question:
+{query}
+
+If the answer is not fully in the context, use your general knowledge.
+"""
+
+    # 4️⃣ Generate answer
+    llm = get_llm(query)
+    response = await llm.ainvoke(prompt)   # 🔥 async version
+
+    # Format sources cleanly
+    sources = []
+    for d in all_docs[:5]:
+        sources.append({
+            "source": d.metadata.get("source"),
+            "type": d.metadata.get("type"),
+            "created_at": d.metadata.get("created_at")
+        })
+
+    print("CONTEXT:", context)
+    print("QUERY:", query)
+    print("ANSWER:", response.content)
 
     return {
-        "query": query,
-        "answer": answer,
-        "sources": format_sources(docs),
-        "verification": verification,
-        "confidence": verification["confidence"],
+        "answer": response.content,
+        "sources": sources
     }

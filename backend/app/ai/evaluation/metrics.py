@@ -8,7 +8,9 @@ def compute_groundedness(verification: dict) -> float:
     if not checks:
         return 0.0  
     
-    supported_claims = sum(1 for c in checks if c.get("supported"))
+    supported_claims = sum(
+    1 for c in checks if isinstance(c, dict) and c.get("supported")
+    )
     return supported_claims / len(checks)
 
 def was_regenerated(confidence: str) -> bool:

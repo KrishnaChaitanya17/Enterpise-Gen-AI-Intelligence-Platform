@@ -1,18 +1,21 @@
-def verify_answer(answer: str):
+def verify_answer(answer):
 
-    if not answer:
-        return {
-            "verified": False,
-            "confidence": 0.2
-        }
+    if not isinstance(answer, str):
+        answer = str(answer)
 
     if len(answer) < 20:
         return {
-            "verified": False,
-            "confidence": 0.4
+            "verdict": "LOW_QUALITY",
+            "confidence": "low",
+            "checks": [
+                {"check": "length", "supported": False}
+            ]
         }
 
     return {
-        "verified": True,
-        "confidence": 0.9
+        "verdict": "GOOD",
+        "confidence": "high",
+        "checks": [
+            {"check": "length", "supported": True}
+        ]
     }

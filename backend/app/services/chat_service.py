@@ -15,16 +15,20 @@ class ChatService:
 
         organization_id = organization_id or None
 
+        # ---------------------------------
+        # 1️⃣ RUN PIPELINE (SAFE)
+        # ---------------------------------
         try:
-
-            # ✅ Run full AI pipeline
             result = await ai_pipeline.run(
                 query=query,
                 user_id=user_id,
                 organization_id=organization_id
             )
 
+            print("✅ PIPELINE RESULT:", result)
+
         except Exception as e:
+            print("🔥 PIPELINE ERROR:", str(e))
 
             result = {
                 "trace_id": trace_id,
@@ -33,7 +37,9 @@ class ChatService:
                 "enterprise": None
             }
 
-        # ✅ Save interaction to Mongo
+        # ---------------------------------
+        # 2️⃣ SAVE INTERACTION (SAFE)  🔥 FIX
+        # ---------------------------------
         interaction = {
             "trace_id": result.get("trace_id", trace_id),
             "conversation_id": conversation_id,
@@ -46,20 +52,34 @@ class ChatService:
             "created_at": datetime.utcnow()
         }
 
-        await InteractionRepository().save(interaction)
+        try:
+            await InteractionRepository().save(interaction)
+            print("✅ Interaction saved:", interaction)
 
-        print("✅ Interaction saved:", interaction)
+        except Exception as e:
+            print("🔥 DB SAVE ERROR:", str(e))   # <-- THIS WAS MISSING
 
+        # ---------------------------------
+        # 3️⃣ ALWAYS RETURN RESPONSE
+        # ---------------------------------
         return result
-    
-    async def stream_answer(self,query, user_id, organization_id):
 
-        async for token in ai_pipeline.stream(
-            query=query,
-            user_id=user_id,
-            organization_id=organization_id
-        ):
-            yield token
+    # ---------------------------------
+    # STREAMING (SAFE)
+    # ---------------------------------
+    async def stream_answer(self, query, user_id, organization_id):
+
+        try:
+            async for token in ai_pipeline.stream(
+                query=query,
+                user_id=user_id,
+                organization_id=organization_id
+            ):
+                yield token
+
+        except Exception as e:
+            print("🔥 STREAM ERROR:", str(e))
+            yield "Streaming failed."
 
 
 chat_service = ChatService()
