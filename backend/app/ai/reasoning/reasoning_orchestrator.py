@@ -29,7 +29,15 @@ async def run_decision_reasoning(evidence):
     # -----------------------------
     final_answer = answer
 
-    if verification.get("verdict") != "SUPPORTED":
+    confidence = evidence.get("confidence", "low")
+
+    should_retry = (
+        not verification or
+        verification.get("verdict") != "SUPPORTED" or
+        confidence == "low"
+    )
+
+    if should_retry:
         final_answer = await retry_with_reasoning(
             query,
             answer,
@@ -42,5 +50,8 @@ async def run_decision_reasoning(evidence):
     decision = aggregate_decisions(opinions)
 
     decision.final_answer = final_answer
+
+    print("VERIFICATION:", verification)
+    print("FINAL ANSWER AFTER HEALING:", final_answer)
 
     return decision

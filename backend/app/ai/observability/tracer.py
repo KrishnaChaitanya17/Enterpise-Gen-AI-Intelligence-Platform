@@ -1,6 +1,6 @@
 import time
 from app.core.logging import logger
-
+import uuid
 
 class TraceSpan:
 

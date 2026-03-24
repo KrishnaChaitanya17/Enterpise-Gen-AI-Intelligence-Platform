@@ -31,7 +31,13 @@ async def retry_with_reasoning(query: str, rag_answer: str, verification: dict) 
         return rag_answer
 
     retry_prompt = f"""
-The original answer may be incorrect or unsupported.
+You are an expert AI system improving a weak or incorrect answer.
+
+Rules:
+- Fix factual errors
+- Be clear and concise
+- Do NOT hallucinate
+- If unsure, say "I’m not fully certain"
 
 Question:
 {query}
@@ -39,8 +45,10 @@ Question:
 Previous Answer:
 {rag_answer}
 
-Please regenerate a better answer using your general knowledge.
+Return a better, accurate answer.
 """
 
     llm = get_llm()
     improved = await llm.ainvoke(retry_prompt)
+
+    return improved.content if improved else rag_answer

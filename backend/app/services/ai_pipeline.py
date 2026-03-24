@@ -131,15 +131,21 @@ User question:
             with TraceSpan(trace_id, "agent_execution"):
                 agent_result = await run_agent_graph(augmented_query)
                 
-                # ✅ HANDLE BOTH dict and string
-                if isinstance(agent_result, dict):
-                    answer = agent_result.get("answer", "")
-                    sources = agent_result.get("sources", [])
-                    verification_result = agent_result.get("verification", {
-                        "confidence": "medium",
-                        "verdict": "UNKNOWN",
+            if isinstance(agent_result, dict):
+                answer = agent_result.get("answer", "")
+                sources = agent_result.get("sources", [])
+
+                verification_result = agent_result.get("verification")
+
+                # 🔥 HARD FAIL SAFE
+                if not verification_result or not isinstance(verification_result, dict):
+                    verification_result = {
+                        "verdict": "UNVERIFIED",
+                        "confidence": 0.3,
+                        "groundedness": 0.0,
+                        "truth_score": 0.0,
                         "checks": []
-                    })
+                    }
                 else:
                     answer = str(agent_result)
                     sources = []
@@ -181,7 +187,9 @@ User question:
             
                 verification_result = {
                     "verdict": "UNVERIFIED",
-                    "confidence": "medium",
+                    "confidence": 0.3,
+                    "groundedness": 0.0,
+                    "truth_score": 0.0,
                     "checks": []
                 }
 
@@ -241,13 +249,6 @@ User question:
 
             logger.info(f"Moderation result: {moderation_result}")
 
-            if not isinstance(agent_result.get("verification"), dict):
-                agent_result["verification"] = {
-                    "verdict": "UNKNOWN",
-                    "confidence": "low",
-                    "checks": []
-                }
-
             # ---------------------------------
             # 4️⃣ EVALUATION
             # ---------------------------------
@@ -256,7 +257,7 @@ User question:
                 query=query,
                 answer=final_answer,
                 verification=verification_result,
-                confidence=verification_result.get("confidence", "low"),
+                confidence=verification_result.get("confidence", 0.3),
                 sources=sources
             )
 
@@ -264,6 +265,8 @@ User question:
             # 5️⃣ ENTERPRISE TRUST
             # ---------------------------------
 
+            logger.info(f"FINAL VERIFICATION USED: {verification_result}")
+            
             enterprise_result = run_enterprise_pipeline(
                 verification_result,
                 evaluation_result,

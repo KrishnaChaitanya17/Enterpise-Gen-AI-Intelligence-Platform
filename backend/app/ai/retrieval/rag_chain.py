@@ -1,6 +1,5 @@
 from app.core.llm_client import get_llm
 from app.ai.verification.verifier_agent import verify_answer
-from app.ai.retrieval.source_formatter import format_sources
 from app.ai.retrieval.hybrid_retriever import hybrid_search, extract_filters
 
 async def run_rag(query: str, filters: dict = None):
@@ -14,26 +13,32 @@ async def run_rag(query: str, filters: dict = None):
         [d.page_content for d in all_docs[:5]]
     )
 
-    # 3️⃣ Build prompt
+    # 3️⃣ Prompt
     prompt = f"""
 You are a helpful AI assistant.
-
-Answer the question clearly and concisely.
 
 Context:
 {context}
 
 Question:
 {query}
-
-If the answer is not fully in the context, use your general knowledge.
 """
 
     # 4️⃣ Generate answer
     llm = get_llm(query)
-    response = await llm.ainvoke(prompt)   # 🔥 async version
+    response = await llm.ainvoke(prompt)
 
-    # Format sources cleanly
+    # ✅ 5️⃣ VERIFY (THIS WAS MISSING)
+    verification = verify_answer(
+        query,
+        response.content,
+        all_docs
+    )
+
+    # ✅ 6️⃣ Confidence from verifier
+    confidence = verification.get("confidence", 0.3)
+
+    # 7️⃣ Sources
     sources = []
     for d in all_docs[:5]:
         sources.append({
@@ -42,11 +47,9 @@ If the answer is not fully in the context, use your general knowledge.
             "created_at": d.metadata.get("created_at")
         })
 
-    print("CONTEXT:", context)
-    print("QUERY:", query)
-    print("ANSWER:", response.content)
-
     return {
         "answer": response.content,
-        "sources": sources
+        "sources": sources,
+        "verification": verification,
+        "confidence": confidence
     }
