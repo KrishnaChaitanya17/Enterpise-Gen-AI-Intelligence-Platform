@@ -1,15 +1,12 @@
-from app.core.llm_client import get_llm
+from app.core.llm_provider import get_llm
+from app.core.llm_executor import safe_llm_call
+from app.ai.router.model_router import route_model
 
-def llm_verify_claim(claim: str, docs: list) -> dict:
-    """
-    LLM-based semantic verifier.
-    Used when rule-based grounding fails.
-    """
 
-    llm = get_llm(temperature=0.0)
+async def llm_verify_claim(claim: str, docs: list, trace_id=None) -> dict:
 
     context = "\n\n".join(
-        f"Source:\n{doc.page_content}" for doc in docs
+        f"Source:\n{doc.page_content}" for doc in docs[:3]
     )
 
     prompt = f"""
@@ -21,17 +18,20 @@ Claim:
 Context:
 {context}
 
-Answer ONLY with one word:
+Answer ONLY:
 SUPPORTED or NOT_SUPPORTED
 """
 
-    print("🧠 LLM verifier checking claim:", claim)
+    models = route_model(claim)
+    llms = get_llm(models, claim)
 
-    response = llm.invoke(prompt).content.strip().upper()
+    response = await safe_llm_call(llms, prompt, trace_id)
+
+    result = response.content.strip().upper()
 
     return {
         "claim": claim,
-        "supported": response == "SUPPORTED",
+        "supported": result == "SUPPORTED",
         "method": "llm",
         "source": docs[0].metadata.get("source") if docs else None
     }

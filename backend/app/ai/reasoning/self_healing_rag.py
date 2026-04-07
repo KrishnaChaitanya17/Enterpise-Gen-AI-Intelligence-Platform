@@ -1,32 +1,16 @@
-# async def retry_with_reasoning(query,rag_answer,verification):
-
-#     if verification.get("verdict") == "SUPPORTED":
-#         return rag_answer
-    
-#     retry_prompt = f"""
-# The original answer may be incorrect orr unsupported.retry_with_reasoning
-
-# Question:
-# {query}
-
-# Previous Answer:
-# {rag_answer}
-
-# Please regenerate a better answer using general knowledge.
-# """
-    
-#     from app.core.llm_client import get_llm
-
-#     llm = get_llm()
-#     improved = await llm.ainvoke(retry_prompt)
-
-#     return improved
-
-from app.core.llm_client import get_llm
+from app.core.llm_provider import get_llm
+from app.core.llm_executor import safe_llm_call
+from app.ai.router.model_router import route_model
 
 
-async def retry_with_reasoning(query: str, rag_answer: str, verification: dict) -> str:
+async def retry_with_reasoning(
+    query: str,
+    rag_answer: str,
+    verification: dict,
+    trace_id: str = None
+) -> str:
 
+    # ✅ If already good → return
     if verification.get("verdict") == "SUPPORTED":
         return rag_answer
 
@@ -48,7 +32,11 @@ Previous Answer:
 Return a better, accurate answer.
 """
 
-    llm = get_llm()
-    improved = await llm.ainvoke(retry_prompt)
+    models = route_model(query)
 
-    return improved.content if improved else rag_answer
+    # 🔥 Use multi-model system
+    llms = get_llm(models, query)
+
+    improved = await safe_llm_call(llms, retry_prompt, trace_id)
+
+    return improved.content if hasattr(improved, "content") else rag_answer

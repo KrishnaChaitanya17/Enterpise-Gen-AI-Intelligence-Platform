@@ -15,12 +15,22 @@ from app.ai.observability.trace_store import save_trace
 from app.ai.observability.cost_tracker import track_cost
 from app.core.logging import logger
 from app.domain.repositories.interaction_repository import InteractionRepository
-from app.core.llm_client import get_llm
+from app.core.llm_provider import get_llm
+from app.core.llm_executor import safe_llm_call
 from app.ai.memory.conversation_memory import ConversationMemory
 from app.ai.observability.tracer import TraceSpan
-from app.core.circuit_breaker import llm_breaker
 
-# ✅ AGENT SYSTEM (Phase 2)
+from app.ai.guardrails.input_guard import input_guard
+from app.ai.guardrails.output_guard import output_guard
+from app.ai.guardrails.prompt_injection import detect_prompt_injection
+from app.ai.guardrails.pii_guard import detect_pii, mask_pii
+from app.ai.moderation.policy.moderation_agent import moderate
+from app.ai.moderation.langgraph.audit_logger import log_audit
+
+# ✅ NEW (Phase 1 Fix)
+from app.ai.router.model_router import route_model
+
+# ✅ AGENT SYSTEM
 from app.ai.agents.langgraph.graph_builder import run_agent_graph
 
 
@@ -29,7 +39,6 @@ from app.ai.agents.langgraph.graph_builder import run_agent_graph
 # --------------------------------------------------
 
 def is_bad_answer(answer):
-
     if not isinstance(answer, str):
         return True
 
@@ -67,6 +76,36 @@ class AIPipeline:
         start_time = time.time()
         conversation_id = conversation_id or str(uuid.uuid4())
 
+        # ---------------------------------
+        # 🔐 INPUT GUARDRAILS
+        # ---------------------------------
+
+        guard = input_guard(query)
+
+        if guard.get("blocked"):
+            return {
+                "trace_id": trace_id,
+                "answer": guard["reason"],
+                "confidence": "low",
+                "moderation_status": "BLOCKED"
+            }
+
+        # 🔥 Prompt Injection Detection
+        if detect_prompt_injection(query):
+            return {
+                "trace_id": trace_id,
+                "answer": "Prompt injection detected. Request blocked.",
+                "confidence": "low",
+                "moderation_status": "BLOCKED"
+            }
+
+        # 🔥 PII Detection (input)
+        if detect_pii(query):
+            query = mask_pii(query)
+
+        # -----------------------------
+        # Conversation Memory
+        # -----------------------------
         if conversation_id not in self.memory_store:
             self.memory_store[conversation_id] = ConversationMemory()
 
@@ -117,7 +156,7 @@ class AIPipeline:
                 }
 
             # ---------------------------------
-            # 1️⃣ AGENT SYSTEM (FIXED)
+            # 1️⃣ AGENT SYSTEM
             # ---------------------------------
 
             augmented_query = f"""
@@ -130,61 +169,18 @@ User question:
 
             with TraceSpan(trace_id, "agent_execution"):
                 agent_result = await run_agent_graph(augmented_query)
-                
+
+            answer = ""
+            sources = []
+            verification_result = {}
+
             if isinstance(agent_result, dict):
                 answer = agent_result.get("answer", "")
                 sources = agent_result.get("sources", [])
+                verification_result = agent_result.get("verification", {})
 
-                verification_result = agent_result.get("verification")
-
-                # 🔥 HARD FAIL SAFE
-                if not verification_result or not isinstance(verification_result, dict):
-                    verification_result = {
-                        "verdict": "UNVERIFIED",
-                        "confidence": 0.3,
-                        "groundedness": 0.0,
-                        "truth_score": 0.0,
-                        "checks": []
-                    }
-                else:
-                    answer = str(agent_result)
-                    sources = []
-                    verification_result = {
-                        "confidence": "medium",
-                        "verdict": "UNKNOWN",
-                        "checks": []
-                    }
-
-                # ✅ FINAL SAFETY
-                if not isinstance(answer, str):
-                    answer = str(answer)
-                
-
-            # ---------------------------------
-            # 2️⃣ LLM FALLBACK (SAFE)
-            # ---------------------------------
-
-            if not answer or is_bad_answer(answer):
-
-                logger.info(f"TRACE_ID={trace_id} | LLM fallback triggered")
-
-                with TraceSpan(trace_id, "llm_fallback"):
-
-                    llm = get_llm()
-
-                    try:
-                        response = await llm.ainvoke(query)
-                    except Exception as e:
-                        logger.error(f"LLM failure: {e}")
-                        raise
-
-                answer = getattr(response, "content", None)
-
-                if not answer:
-                    answer = str(response)
-
-                answer = answer.strip()
-            
+            # ✅ Safety fallback for verification
+            if not isinstance(verification_result, dict):
                 verification_result = {
                     "verdict": "UNVERIFIED",
                     "confidence": 0.3,
@@ -193,11 +189,37 @@ User question:
                     "checks": []
                 }
 
+            # ---------------------------------
+            # 2️⃣ LLM FALLBACK (WITH ROUTING)
+            # ---------------------------------
+
+            if not answer or is_bad_answer(answer):
+
+                logger.info(f"TRACE_ID={trace_id} | LLM fallback triggered")
+
+                models = route_model(query, organization_id)
+                llms = get_llm(models)
+
+                with TraceSpan(trace_id, "llm_fallback"):
+                    response = await safe_llm_call(llms, query, trace_id)
+
+                content = getattr(response, "content", str(response))
+
                 track_cost(
-                    model=llm.model_name,
-                    prompt=query,
-                    response=answer
-                )
+                            model=models[0],
+                            prompt=query,
+                            response=content
+                        )
+
+                answer = content.strip()
+
+                verification_result = {
+                    "verdict": "UNVERIFIED",
+                    "confidence": 0.3,
+                    "groundedness": 0.0,
+                    "truth_score": 0.0,
+                    "checks": []
+                }
 
             # ---------------------------------
             # 3️⃣ PARALLEL AI CHECKS
@@ -213,7 +235,7 @@ User question:
             with TraceSpan(trace_id, "parallel_ai_checks"):
 
                 hallucination_task = hallucination_guard(
-                    query, answer, sources
+                    query, answer, sources, trace_id
                 )
 
                 moderation_task = asyncio.to_thread(
@@ -230,27 +252,48 @@ User question:
                     reasoning_task
                 )
 
-            moderation_flag = False
-
-            if moderation_result.get("final_verdict") == "BLOCK":
-                moderation_flag = True
-
-                logger.warning(f"TRACE_ID={trace_id} | Moderation flagged content")
+            moderation_flag = (
+                moderation_result.get("final_verdict") == "BLOCK"
+            )
 
             final_answer = getattr(reasoning_result, "final_answer", None) or answer
 
+            # ---------------------------------
+            # 🔐 POLICY ENGINE
+            # ---------------------------------
+
+            policy_result = moderate(query, final_answer)
+
+            if policy_result.verdict == "BLOCK":
+                final_answer = "Response blocked due to policy violation."
+
+            # ---------------------------------
+            # 🔐 OUTPUT GUARD
+            # ---------------------------------
+
+            final_answer = output_guard(final_answer)
+
+            # ---------------------------------
+            # 🔐 PII MASKING (OUTPUT)
+            # ---------------------------------
+
+            if detect_pii(final_answer):
+                final_answer = mask_pii(final_answer)
+
             if moderation_flag:
                 final_answer = (
-                    "This topic may involve sensitive or evolving informartion.\n\n"
+                    "This topic may involve sensitive or evolving information.\n\n"
                     + final_answer
                 )
 
+            # ---------------------------------
+            # Memory Update
+            # ---------------------------------
+
             memory.add(query, final_answer[:1000])
 
-            logger.info(f"Moderation result: {moderation_result}")
-
             # ---------------------------------
-            # 4️⃣ EVALUATION
+            # 4️⃣ Evaluation
             # ---------------------------------
 
             evaluation_result = evaluate_response(
@@ -262,11 +305,9 @@ User question:
             )
 
             # ---------------------------------
-            # 5️⃣ ENTERPRISE TRUST
+            # 5️⃣ Enterprise Trust
             # ---------------------------------
 
-            logger.info(f"FINAL VERIFICATION USED: {verification_result}")
-            
             enterprise_result = run_enterprise_pipeline(
                 verification_result,
                 evaluation_result,
@@ -274,7 +315,7 @@ User question:
             )
 
             # ---------------------------------
-            # 6️⃣ SAVE
+            # 6️⃣ Save Interaction
             # ---------------------------------
 
             await InteractionRepository().save({
@@ -287,6 +328,10 @@ User question:
                 "enterprise": enterprise_result,
                 "created_at": datetime.utcnow()
             })
+
+            # ---------------------------------
+            # Cache Store
+            # ---------------------------------
 
             if enterprise_result.get("trust_score", 0) > 0.7 and len(final_answer) < 2000:
                 add_to_cache(query, final_answer)
@@ -307,6 +352,17 @@ User question:
                 timestamp=datetime.utcnow()
             ))
 
+            log_audit({
+                "query": query,
+                "answer": final_answer,
+                "final_verdict": moderation_result.get("final_verdict"),
+                "agent_decisions": moderation_result.get("agent_decisions"),
+                "audit_trail": {
+                    "policy": policy_result.__dict__,
+                    "verification": verification_result
+                }
+            })
+
             return {
                 "trace_id": trace_id,
                 "user_id": user_id,
@@ -323,7 +379,7 @@ User question:
             return {
                 "trace_id": trace_id,
                 "user_id": user_id,
-                "answer": "Internal AI pipeline error.",
+                "answer": "⚠️ Temporary AI issue. Retrying with fallback models failed. Please try again.",
                 "confidence": "low",
                 "moderation_status": "ALLOW",
                 "enterprise": {
@@ -333,15 +389,13 @@ User question:
             }
 
     # --------------------------------------------------
-    # STREAM (FIXED)
+    # STREAM
     # --------------------------------------------------
 
     async def stream(self, query: str, user_id: str, organization_id=None):
 
-        trace_id = str(uuid.uuid4())
-
         try:
-            result = await run_agent_system(query)
+            result = await run_agent_graph(query)
 
             if isinstance(result, dict):
                 answer = result.get("answer", "")
@@ -358,6 +412,7 @@ User question:
 
 
 ai_pipeline = AIPipeline()
+
 
 # # 1️⃣ RAG → generates answer
 # # 2️⃣ Verification → validates it

@@ -30,3 +30,6 @@ def save_trace(trace):
         "latency": trace.latency,
         "timestamp": trace.timestamp
     })
+
+def get_traces():
+    return TRACE_STORE

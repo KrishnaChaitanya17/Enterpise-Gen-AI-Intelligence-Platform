@@ -1,37 +1,52 @@
 from typing import TypedDict, List, Optional
 from langgraph.graph import StateGraph, END
-import re
 
-# existing logic
+# Core systems
 from app.ai.retrieval.rag_chain import run_rag
 from app.ai.reasoning.reasoning_orchestrator import run_decision_reasoning
+from app.ai.tools.tool_registry import get_tool
 
-# reuse your old agent logic
-from app.ai.agents.router_agent import route_query
-from app.ai.agents.tool_agent import tool_agent
+# Agents
+from app.ai.agents.planner_agent import plan_task
+from app.ai.agents.router_agent import route_query_llm
 
+# Guards
 from app.ai.guardrails.input_guard import input_guard
 from app.ai.guardrails.prompt_injection import detect_prompt_injection
 from app.ai.guardrails.output_guard import output_guard
 
+# Self-healing
 from app.ai.self_healing.self_healing import self_heal_rag
-from app.ai.evaluation.confidence import calculate_confidence
+
+# Observability
 from app.ai.observability.tracer_adv import start_trace, log_step, end_trace
 
+
 # ---------------- STATE ----------------
+
 class AgentState(TypedDict):
     query: str
+    plan: Optional[str]
     route: Optional[str]
     rag_output: Optional[dict]
+    tool_output: Optional[str]
     reasoning: Optional[str]
     final_answer: Optional[str]
+    retries: int
     steps: List[str]
 
 
 # ---------------- NODES ----------------
 
+async def planner_node(state: AgentState):
+    plan = await plan_task(state["query"])
+    state["plan"] = plan
+    state["steps"].append(f"plan:{plan}")
+    return state
+
+
 async def router_node(state: AgentState):
-    route = route_query(state["query"])
+    route = await route_query_llm(state["query"], state.get("plan"))
     state["route"] = route
     state["steps"].append(f"router:{route}")
     return state
@@ -40,7 +55,6 @@ async def router_node(state: AgentState):
 async def retrieval_node(state: AgentState):
     rag_result = await run_rag(state["query"])
 
-    # 🔥 self-healing BEFORE reasoning
     rag_result = await self_heal_rag(
         state["query"],
         rag_result,
@@ -53,24 +67,15 @@ async def retrieval_node(state: AgentState):
 
 
 async def tool_node(state: AgentState):
-
-    from app.ai.tools.tool_registry import get_tool
-
     query = state.get("query", "")
 
-    if re.fullmatch(r"[0-9+\-*/(). ]+", query.strip()):
+    # 🔥 dynamic tool selection (LLM-style fallback)
+    tool = get_tool("calculator")
 
-        tool = get_tool("calculator")
+    if tool and any(op in query for op in ["+", "-", "*", "/"]):
+        result = tool(query)
+        state["tool_output"] = result
 
-        if tool:
-            result = tool(query)
-
-            state["final_answer"] = result
-            state["steps"].append("tool")
-
-            return state
-
-    # fallback if no tool used
     state["steps"].append("tool")
     return state
 
@@ -78,14 +83,14 @@ async def tool_node(state: AgentState):
 async def reasoning_node(state: AgentState):
 
     rag_output = state.get("rag_output") or {}
+    tool_output = state.get("tool_output")
 
-    answer = rag_output.get("answer")
-    verification = rag_output.get("verification", {})
+    answer = tool_output or rag_output.get("answer")
 
     evidence = {
         "query": state.get("query"),
         "answer": answer,
-        "verification": verification,
+        "verification": rag_output.get("verification", {}),
         "confidence": rag_output.get("confidence"),
         "sources": rag_output.get("sources")
     }
@@ -94,37 +99,35 @@ async def reasoning_node(state: AgentState):
 
     final_answer = getattr(decision, "final_answer", None)
 
-    # 🔥 STRONG FALLBACK
     if not final_answer:
-        if answer:
-            final_answer = answer
-        else:
-            final_answer = "I couldn't find a reliable answer."
+        final_answer = answer or "I couldn't find a reliable answer."
 
     state["reasoning"] = final_answer
     state["steps"].append("reasoning")
 
     return state
 
+
+async def retry_node(state: AgentState):
+    state["retries"] += 1
+    state["steps"].append("retry")
+    return state
+
+
 async def response_node(state: AgentState):
 
-    # ✅ Priority 1: tool output
-    if state.get("final_answer"):
-        state["final_answer"] = state["final_answer"]
-
-    # ✅ Priority 2: reasoning
-    elif state.get("reasoning"):
+    if state.get("reasoning"):
         state["final_answer"] = state["reasoning"]
-
-    # ✅ fallback
+    elif state.get("tool_output"):
+        state["final_answer"] = state["tool_output"]
     else:
-        state["final_answer"] = "Hello! How can I help you?"
+        state["final_answer"] = "I couldn't generate a proper answer."
 
     state["steps"].append("response")
     return state
 
 
-# ---------------- CONDITIONAL ROUTING ----------------
+# ---------------- DECISION LOGIC ----------------
 
 def route_decision(state: AgentState):
     route = state.get("route")
@@ -138,20 +141,36 @@ def route_decision(state: AgentState):
     return "response"
 
 
+def retry_decision(state: AgentState):
+    retries = state.get("retries", 0)
+    answer = state.get("reasoning", "")
+
+    if retries < 1 and (not answer or len(answer) < 20):
+        return "retry"
+
+    return "response"
+
+
 # ---------------- GRAPH ----------------
 
 def build_graph():
     graph = StateGraph(AgentState)
 
+    # Nodes
+    graph.add_node("planner", planner_node)
     graph.add_node("router", router_node)
     graph.add_node("retrieval", retrieval_node)
     graph.add_node("tool", tool_node)
     graph.add_node("reasoning", reasoning_node)
+    graph.add_node("retry", retry_node)
     graph.add_node("response", response_node)
 
-    graph.set_entry_point("router")
+    # Entry
+    graph.set_entry_point("planner")
 
-    # 🔥 dynamic routing
+    # Flow
+    graph.add_edge("planner", "router")
+
     graph.add_conditional_edges(
         "router",
         route_decision,
@@ -162,9 +181,19 @@ def build_graph():
         }
     )
 
-    graph.add_edge("tool", "response")
+    graph.add_edge("tool", "reasoning")
     graph.add_edge("retrieval", "reasoning")
-    graph.add_edge("reasoning", "response")
+
+    graph.add_conditional_edges(
+        "reasoning",
+        retry_decision,
+        {
+            "retry": "retry",
+            "response": "response"
+        }
+    )
+
+    graph.add_edge("retry", "retrieval")
     graph.add_edge("response", END)
 
     return graph.compile()
@@ -176,37 +205,24 @@ async def run_agent_graph(query: str):
 
     trace = start_trace()
 
-    # 🔥 Input Guard
+    # Guards
     guard = input_guard(query)
     if guard["blocked"]:
-        return {
-            "trace": trace,
-            "final_answer": guard["reason"]
-        }
+        return {"answer": guard["reason"]}
 
-    # 🔥 Prompt Injection
     if detect_prompt_injection(query):
-        return {
-            "trace": trace,
-            "final_answer": "Prompt injection detected."
-        }
+        return {"answer": "Prompt injection detected."}
 
-    # 🔥 Run Graph
     graph = build_graph()
 
     result = await graph.ainvoke({
         "query": query,
-        "steps": []
+        "steps": [],
+        "retries": 0
     })
 
     log_step(trace, "graph_executed")
 
-
-    # 🔥 Confidence Score
-    rag_output = result.get("rag_output") or {}
-    confidence_score = rag_output.get("confidence", 0.5)
-
-    # 🔥 Output Guard
     final_answer = output_guard(result.get("final_answer"))
 
     trace = end_trace(trace)
@@ -214,9 +230,6 @@ async def run_agent_graph(query: str):
     return {
         "trace_id": trace["trace_id"],
         "answer": final_answer,
-        "confidence_score": confidence_score,
         "steps": result.get("steps"),
         "latency": trace["latency"]
     }
-    
-    

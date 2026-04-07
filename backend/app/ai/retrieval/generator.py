@@ -1,15 +1,12 @@
-from app.core.llm_client import get_llm
+from app.core.llm_provider import get_llm
+from app.core.llm_executor import safe_llm_call
+from app.ai.router.model_router import route_model
 
-_llm = None
+async def generate_answer(prompt: str, trace_id=None) -> str:
 
+    models = route_model(prompt)
+    llms = get_llm(models, prompt)
 
-def generate_answer(prompt: str) -> str:
+    response = await safe_llm_call(llms, prompt, trace_id)
 
-    global _llm
-
-    if _llm is None:
-        _llm = get_llm(temperature=0.2)
-
-    response = _llm.invoke(prompt)
-
-    return response.content
+    return getattr(response, "content", "")

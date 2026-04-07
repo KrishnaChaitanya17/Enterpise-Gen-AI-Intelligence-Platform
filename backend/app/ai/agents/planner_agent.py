@@ -1,19 +1,21 @@
-from app.core.llm_client import get_llm
+from app.core.llm_provider import get_llm
+from app.core.llm_executor import safe_llm_call
+from app.ai.router.model_router import route_model
 
 
-async def planner_agent(query: str):
+async def plan_task(query: str, trace_id: str = None):
 
-    llm = get_llm(query)
+    models = route_model(query)
+    llms = get_llm(models, query)
 
     prompt = f"""
-    Break the user request into steps.
+    You are a planning agent.
 
-    Query:
-    {query}
+    Break down the following task into clear steps:
 
-    Return a list of steps required to answer it.
+    Task: {query}
     """
 
-    response = await llm.ainvoke(prompt)
+    response = await safe_llm_call(llms, prompt, trace_id)
 
-    return response.content
+    return response.content if hasattr(response, "content") else str(response)

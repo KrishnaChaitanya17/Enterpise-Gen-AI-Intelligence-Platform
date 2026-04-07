@@ -1,6 +1,9 @@
 from datetime import datetime
 
-COST_LOG = []
+cost_store = []
+
+COST_LOG = cost_store
+
 
 MODEL_PRICES = {
     "openai/gpt-4o-mini": 0.00015,
@@ -8,8 +11,8 @@ MODEL_PRICES = {
     "deepseek/deepseek-coder": 0.0008
 }
 
-def estimate_tokens(text):
 
+def estimate_tokens(text):
     return len(text.split()) * 1.3
 
 
@@ -33,6 +36,9 @@ def track_cost(model, prompt, response):
         "timestamp": datetime.utcnow()
     }
 
-    COST_LOG.append(record)
+    cost_store.append(record)
 
     return record
+
+def get_total_tokens():
+    return sum(r["total_tokens"] for r in cost_store)

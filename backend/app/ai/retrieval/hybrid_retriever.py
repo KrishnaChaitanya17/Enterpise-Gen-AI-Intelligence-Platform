@@ -1,7 +1,14 @@
 from app.ai.ingestion.vector_store import load_vector_db
-from langchain.retrievers import BM25Retriever
+from app.ai.verification.grounding_checker import cosine_similarity
+from langchain_community.retrievers import BM25Retriever
 from datetime import datetime, timedelta
+from sentence_transformers import SentenceTransformer
+import numpy as np
 
+_model = SentenceTransformer("all-MiniLM-L6-v2")
+
+def cosine_similarity(a, b):
+    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
 def keyword_overlap(query: str, text: str) -> float:
     q = set(query.lower().split())
@@ -40,9 +47,24 @@ def hybrid_search(query: str, k: int = 5, filters: dict = None):
 
     scored = []
 
+    query_emb = _model.encode(query)
+
     for d in all_docs:
-        keyword_score = keyword_overlap(query, d.page_content)
-        scored.append((d, keyword_score))
+        content = d.page_content
+
+        # 🔹 keyword score
+        k_score = keyword_overlap(query, content)
+
+        # 🔹 semantic score
+        if not hasattr(d, "embedding"):
+            d.embedding = _model.encode(content)
+
+        s_score = cosine_similarity(query_emb, d.embedding)
+
+        # 🔥 hybrid score
+        final_score = (0.4 * k_score) + (0.6 * s_score)
+
+        scored.append((d, final_score))
 
     scored.sort(key=lambda x: x[1], reverse=True)
 
