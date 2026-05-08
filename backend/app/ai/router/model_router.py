@@ -1,15 +1,9 @@
-import os
+from app.core.config import settings
 from typing import List
+import os
 
-
-# 🔹 Defaults (configurable via env)
-DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "openai/gpt-4o-mini")
-
-FALLBACK_MODELS = os.getenv(
-    "FALLBACK_MODELS",
-    "openai/gpt-4o-mini,deepseek/deepseek-chat,mistralai/mistral-7b-instruct"
-).split(",")
-
+DEFAULT_MODEL = settings.DEFAULT_MODEL
+FALLBACK_MODELS = settings.FALLBACK_MODELS.split(",")
 
 def deduplicate(models: List[str]) -> List[str]:
     """Remove duplicates while preserving order"""

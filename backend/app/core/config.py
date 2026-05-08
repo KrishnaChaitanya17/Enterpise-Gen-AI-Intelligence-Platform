@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     OPENROUTER_API_KEY: str
     OPENROUTER_API_BASE: str
 
+    # 🔥 Model Routing Config
+    DEFAULT_MODEL: str = "openai/gpt-4o-mini"
+    FALLBACK_MODELS: str = "deepseek/deepseek-chat,mistralai/mistral-7b-instruct"
+
     LLM_API_KEY: str
     LLM_API_BASE: str
     CHAT_MODEL: str

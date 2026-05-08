@@ -44,3 +44,6 @@ def add_message(session_id: str, message: dict):
         conversation_store[session_id] = []
 
     conversation_store[session_id].append(message)
+
+    # 🔥 keep only last 10 messages
+    conversation_store[session_id] = conversation_store[session_id][-10:]

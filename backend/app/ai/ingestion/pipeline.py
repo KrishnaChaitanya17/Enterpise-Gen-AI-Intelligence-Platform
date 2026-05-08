@@ -1,44 +1,53 @@
 from app.ai.ingestion.multi_loader import load_documents
 from app.ai.ingestion.chunker import chunk_documents
-from app.ai.ingestion.vector_store import save_vector_db
+from app.ai.ingestion.vector_store import save_vector_db, load_vector_db
 from app.ai.ingestion.embedder import load_embeddings
-import os
 
 from langchain_community.vectorstores import FAISS
 
 
+def extract_existing_hashes(vector_db):
+    hashes = set()
+
+    try:
+        for doc in vector_db.docstore._dict.values():
+            h = doc.metadata.get("file_hash")
+            if h:
+                hashes.add(h)
+    except:
+        pass
+
+    return hashes
+
+
 def run_ingestion_pipeline(data_path: str):
 
-    print(f"📂 Path received: {data_path}")
+    # 🔥 Load existing DB if exists
+    try:
+        vector_db = load_vector_db()
+        existing_hashes = extract_existing_hashes(vector_db)
+        print(f"🔁 Existing documents: {len(existing_hashes)}")
+    except:
+        vector_db = None
+        existing_hashes = set()
 
-    docs = load_documents(data_path)
-    
-    print("\n================ DEBUG START ================")
-    print("📂 Folder path:", data_path)
-    print("📂 Files in folder:", os.listdir(data_path))
-    print("📄 Documents loaded:", len(docs))
+    docs = load_documents(data_path, existing_hashes)
 
-    if len(docs) > 0:
-        print("🧾 First doc preview:", docs[0].page_content[:200])
-    else:
-        print("❌ NO DOCUMENTS LOADED")
-
-    print("================ DEBUG END ================\n")
-
-    # if not docs:
-    #     raise ValueError("❌ No documents loaded. Check path or files.")
+    if not docs:
+        print("⚠️ No new documents to ingest")
+        return vector_db
 
     chunks = chunk_documents(docs)
     print(f"✂️ Chunks created: {len(chunks)}")
 
-    # if not chunks:
-    #     raise ValueError("❌ Chunking failed. No chunks created.")
-
     embeddings = load_embeddings()
 
-    print("🧠 Creating vector DB...")
-
-    vector_db = FAISS.from_documents(chunks, embeddings)
+    if vector_db:
+        print("➕ Updating existing vector DB...")
+        vector_db.add_documents(chunks)
+    else:
+        print("🧠 Creating new vector DB...")
+        vector_db = FAISS.from_documents(chunks, embeddings)
 
     save_vector_db(vector_db)
 

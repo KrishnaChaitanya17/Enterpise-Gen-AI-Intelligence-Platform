@@ -1,5 +1,4 @@
 from app.ai.ingestion.vector_store import load_vector_db
-from app.ai.verification.grounding_checker import cosine_similarity
 from langchain_community.retrievers import BM25Retriever
 from datetime import datetime, timedelta
 from sentence_transformers import SentenceTransformer
@@ -7,8 +6,10 @@ import numpy as np
 
 _model = SentenceTransformer("all-MiniLM-L6-v2")
 
+
 def cosine_similarity(a, b):
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
 
 def keyword_overlap(query: str, text: str) -> float:
     q = set(query.lower().split())
@@ -17,23 +18,22 @@ def keyword_overlap(query: str, text: str) -> float:
 
 
 def get_hybrid_retriever():
-
     vector_db = load_vector_db()
 
-    # 1️⃣ Get ALL documents (for BM25)
-    all_docs = vector_db.similarity_search("", k=1000)  # ⚠️ temp approach
+    # 🔥 smaller sample (fast + enough for BM25)
+    all_docs = vector_db.similarity_search("general", k=100)
 
-    # 2️⃣ Create BM25 on full corpus
     bm25 = BM25Retriever.from_documents(all_docs)
     bm25.k = 5
 
-    # 3️⃣ Vector retriever
     vector_retriever = vector_db.as_retriever(search_kwargs={"k": 5})
 
     return vector_retriever, bm25
 
 
 def hybrid_search(query: str, k: int = 5, filters: dict = None):
+
+    filters = filters or extract_filters(query)
 
     vector_retriever, bm25 = get_hybrid_retriever()
 
@@ -42,26 +42,21 @@ def hybrid_search(query: str, k: int = 5, filters: dict = None):
 
     all_docs = vector_docs + bm25_docs
 
-    # 🔥 Apply filters BEFORE scoring
+    # Apply filters BEFORE scoring
     all_docs = apply_filters(all_docs, filters)
 
     scored = []
-
     query_emb = _model.encode(query)
 
     for d in all_docs:
         content = d.page_content
 
-        # 🔹 keyword score
         k_score = keyword_overlap(query, content)
 
-        # 🔹 semantic score
-        if not hasattr(d, "embedding"):
-            d.embedding = _model.encode(content)
+        # ✅ FIX: no mutation
+        doc_embedding = _model.encode(content)
+        s_score = cosine_similarity(query_emb, doc_embedding)
 
-        s_score = cosine_similarity(query_emb, d.embedding)
-
-        # 🔥 hybrid score
         final_score = (0.4 * k_score) + (0.6 * s_score)
 
         scored.append((d, final_score))
@@ -81,8 +76,8 @@ def hybrid_search(query: str, k: int = 5, filters: dict = None):
 
     return final_docs
 
-def apply_filters(docs, filters: dict):
 
+def apply_filters(docs, filters: dict):
     if not filters:
         return docs
 
@@ -91,17 +86,12 @@ def apply_filters(docs, filters: dict):
     for d in docs:
         meta = d.metadata
 
-        # Filter by type
-        if filters.get("type"):
-            if meta.get("type") != filters["type"]:
-                continue
+        if filters.get("type") and meta.get("type") != filters["type"]:
+            continue
 
-        # Filter by source
-        if filters.get("source"):
-            if filters["source"].lower() not in meta.get("source", "").lower():
-                continue
+        if filters.get("source") and filters["source"].lower() not in meta.get("source", "").lower():
+            continue
 
-        # Filter by recent (in days)
         if filters.get("recent_days"):
             created_at = meta.get("created_at")
             if created_at:
@@ -113,10 +103,9 @@ def apply_filters(docs, filters: dict):
 
     return filtered
 
+
 def extract_filters(query: str):
-
     filters = {}
-
     q = query.lower()
 
     if "pdf" in q:

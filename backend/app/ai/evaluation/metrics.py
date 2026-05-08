@@ -1,24 +1,4 @@
-# These metrics come directly from your pipeline, no ML magic.
-
-def compute_groundedness(verification: dict) -> float:
-    """
-    groundedness = supported_claims / total_claims
-    """
-    checks = verification.get("checks", [])
-    if not checks:
-        return 0.0  
-    
-    supported_claims = sum(
-    1 for c in checks if isinstance(c, dict) and c.get("supported")
-    )
-    return supported_claims / len(checks)
-
-def was_regenerated(confidence: str) -> bool:
-    """
-    Simple signal from LangGraph logic
-    """
-    return confidence in ["medium", "low"]
-    
+# These metrics come directly from your pipeline, no ML magic.    
 # Metrics you currently compute (correctly):
 
 # Metric	                   Source	                        Why it matters
@@ -34,6 +14,9 @@ from pathlib import Path
 EVAL_LOG = Path(__file__).parent / "evaluation_results.jsonl"
 
 def load_evaluation_logs():
+    if not EVAL_LOG.exists():
+        return []
+
     with open(EVAL_LOG, "r") as f:
         return [json.loads(line) for line in f]
 
@@ -97,6 +80,25 @@ def optimization_recommendations():
 
     if low_grounded == zero_retrieval == regenerated == 0:
         print("• System healthy — no optimization needed")
+
+def compute_groundedness(verification: dict) -> float:
+    """
+    groundedness = supported_claims / total_claims
+    """
+    checks = verification.get("checks", [])
+    if not checks:
+        return 0.0  
+    
+    supported_claims = sum(
+    1 for c in checks if isinstance(c, dict) and c.get("supported")
+    )
+    return supported_claims / len(checks)
+
+def was_regenerated(confidence: str) -> bool:
+    """
+    Simple signal from LangGraph logic
+    """
+    return confidence in ["medium", "low"]
 
 if __name__ == "__main__":
     offline_analysis()

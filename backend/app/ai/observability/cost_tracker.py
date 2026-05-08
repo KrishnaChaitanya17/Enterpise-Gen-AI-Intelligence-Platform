@@ -42,3 +42,22 @@ def track_cost(model, prompt, response):
 
 def get_total_tokens():
     return sum(r["total_tokens"] for r in cost_store)
+
+# 🔥 ALERT THRESHOLDS
+COST_ALERT_THRESHOLD = 1.0   # $1
+TOKEN_ALERT_THRESHOLD = 100000
+
+
+def check_alerts():
+    total_cost = sum(r["cost"] for r in cost_store)
+    total_tokens = get_total_tokens()
+
+    alerts = []
+
+    if total_cost > COST_ALERT_THRESHOLD:
+        alerts.append(f"⚠️ High cost detected: ${total_cost:.2f}")
+
+    if total_tokens > TOKEN_ALERT_THRESHOLD:
+        alerts.append(f"⚠️ High token usage: {total_tokens}")
+
+    return alerts

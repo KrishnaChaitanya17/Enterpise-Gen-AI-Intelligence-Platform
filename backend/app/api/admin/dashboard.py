@@ -10,15 +10,19 @@ def ai_dashboard():
 
     metrics = get_metrics()
 
-    total_cost = sum(record["cost"] for record in COST_LOG)
+    total_cost = sum(record.get("cost", 0) for record in COST_LOG)
 
-    models = list(set(record["model"] for record in COST_LOG))
+    models = list(set(record.get("model", "unknown") for record in COST_LOG))
 
     return {
-        "queries": metrics["total_queries"],
-        "avg_latency": metrics["avg_latency"],
-        "avg_trust": metrics["avg_trust_score"],
-        "moderation_blocks": metrics["moderation_blocks"],
+        "queries": metrics.get("total_queries", 0),
+        "avg_latency": metrics.get("avg_latency", 0),
+        "avg_trust": metrics.get("avg_trust_score", 0),
+        "moderation_blocks": metrics.get("moderation_blocks", 0),
+
+        # 🔥 NEW
+        "error_rate": metrics.get("error_rate", 0),
+
         "total_cost": total_cost,
         "models_used": models
     }

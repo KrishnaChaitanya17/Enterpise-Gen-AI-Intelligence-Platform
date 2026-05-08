@@ -42,4 +42,6 @@ HALLUCINATION
         logger.warning(f"Hallucination guard failed: {e}")
 
         # fail-safe allow
-        return True
+        is_safe = "HALLUCINATION" not in result.upper()
+
+        return is_safe

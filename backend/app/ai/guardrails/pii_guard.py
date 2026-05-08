@@ -19,6 +19,9 @@ def detect_pii(text: str):
 
 
 def mask_pii(text: str):
+    detected = detect_pii(text)
+
     for pattern in PII_PATTERNS.values():
         text = re.sub(pattern, "[REDACTED]", text)
-    return text
+
+    return text, detected

@@ -1,18 +1,25 @@
-BANNED_KEYWORDS = [
-    "hack", "exploit", "bypass", "steal", "attack"
-]
+BANNED_KEYWORDS = {
+    "hack": "high",
+    "exploit": "high",
+    "bypass": "high",
+    "steal": "high",
+    "attack": "medium"
+}
+
 
 def input_guard(query: str):
 
     q = query.lower()
 
-    for word in BANNED_KEYWORDS:
+    for word, severity in BANNED_KEYWORDS.items():
         if word in q:
             return {
                 "blocked": True,
-                "reason": f"Blocked due to unsafe keyword: {word}"
+                "reason": f"{severity} risk keyword: {word}",
+                "severity": severity
             }
 
     return {
-        "blocked": False
+        "blocked": False,
+        "severity": "low"
     }
